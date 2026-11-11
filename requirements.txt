@@ -1,0 +1,9 @@
+numpy>=2.0
+requests>=2.32
+soundfile>=0.13
+zhconv>=1.4
+mutagen>=1.47
+musicdl>=2.14
+PySide6>=6.6
+segno>=1.6
+send2trash>=1.8

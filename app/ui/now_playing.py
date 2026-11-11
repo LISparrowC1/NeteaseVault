@@ -1,0 +1,209 @@
+"""Full-page now-playing view, modelled on LX Music's play detail.
+
+Left: album art (fetched from the cloud cover URL) with title and credits.
+Right: lyrics as a list; the current line is highlighted and kept centred.
+It is a page, not a dialog — the list page and this page swap places.
+"""
+from __future__ import annotations
+
+import threading
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QPixmap
+from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+                               QPushButton, QVBoxLayout, QWidget)
+
+from ..core import covers
+from . import theme
+
+
+def read_lyrics(path: Path) -> str:
+    if path.suffix.lower() == ".flac":
+        from mutagen.flac import FLAC
+
+        tags = FLAC(path)
+        lines = tags.get("LYRICS") or tags.get("lyrics") or []
+    elif path.suffix.lower() == ".mp3":
+        from mutagen.id3 import ID3
+
+        lines = [frame.text for frame in ID3(path).getall("USLT")]
+    else:
+        return ""
+    return lines[0] if lines else ""
+
+
+def parse_stamp(line: str) -> int | None:
+    """`[mm:ss.xx]` -> milliseconds."""
+    line = line.strip()
+    if not line.startswith("[") or "]" not in line:
+        return None
+    body = line[1:line.index("]")]
+    try:
+        minutes, rest = body.split(":")
+        seconds = float(rest)
+    except ValueError:
+        return None
+    return int((int(minutes) * 60 + seconds) * 1000)
+
+
+def strip_stamp(line: str) -> str:
+    if line.startswith("[") and "]" in line:
+        return line[line.index("]") + 1:].strip()
+    return line.strip()
+
+
+class _CoverLoader(threading.Thread):
+    """Reads from the on-disk cache first; only misses hit the network."""
+
+    def __init__(self, url: str, callback):
+        super().__init__(daemon=True)
+        self._url, self._callback = url, callback
+
+    def run(self) -> None:
+        data = covers.load(self._url) or covers.fetch(self._url)
+        if data:
+            self._callback(data)
+
+
+class NowPlayingPage(QWidget):
+    back_requested = Signal()
+    cover_ready = Signal(bytes)
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._player = None
+        self._stamps: list[int | None] = []
+        self._current = -1
+        self._cover_url = ""
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(36, 20, 36, 20)
+        root.setSpacing(12)
+
+        top = QHBoxLayout()
+        back = QPushButton("‹ 返回列表")
+        back.setObjectName("NavItem")
+        back.setCursor(Qt.PointingHandCursor)
+        back.clicked.connect(self.back_requested.emit)
+        top.addWidget(back)
+        top.addStretch(1)
+        root.addLayout(top)
+
+        body = QHBoxLayout()
+        body.setSpacing(36)
+
+        left = QVBoxLayout()
+        left.setSpacing(12)
+        self.cover = QLabel()
+        self.cover.setFixedSize(320, 320)
+        self.cover.setAlignment(Qt.AlignCenter)
+        self.cover.setObjectName("Cover")
+        left.addWidget(self.cover)
+        self.title = QLabel("未在播放")
+        self.title.setObjectName("NowTitle")
+        self.title.setWordWrap(True)
+        left.addWidget(self.title)
+        self.meta = QLabel("")
+        self.meta.setObjectName("PlaylistMeta")
+        self.meta.setWordWrap(True)
+        left.addWidget(self.meta)
+        left.addStretch(1)
+        body.addLayout(left)
+
+        self.lyrics = QListWidget()
+        self.lyrics.setObjectName("LyricList")
+        self.lyrics.setFocusPolicy(Qt.NoFocus)
+        self.lyrics.setSelectionMode(QListWidget.NoSelection)
+        self.lyrics.setVerticalScrollMode(QListWidget.ScrollPerPixel)
+        body.addWidget(self.lyrics, 1)
+        root.addLayout(body, 1)
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._tick)
+        self.cover_ready.connect(self._apply_cover)
+        self._placeholder()
+
+    # -- public -----------------------------------------------------------
+
+    def show_track(self, path: Path, title: str, artist: str, album: str,
+                   player, cover_url: str | None = None) -> None:
+        self.title.setText(title or path.stem)
+        self.meta.setText("\n".join(part for part in (artist, album) if part))
+        self._player = player
+        self._current = -1
+        self.lyrics.clear()
+        self._stamps = []
+
+        text = read_lyrics(path)
+        if text:
+            for line in text.splitlines():
+                stamp = parse_stamp(line)
+                content = strip_stamp(line)
+                if not content:
+                    self._stamps.append(stamp)
+                    continue
+                self._stamps.append(stamp)
+                item = QListWidgetItem(content)
+                item.setTextAlignment(Qt.AlignHCenter)
+                self.lyrics.addItem(item)
+        else:
+            self.lyrics.addItem(QListWidgetItem("这首歌没有内嵌歌词。"))
+
+        self._placeholder()
+        if cover_url and cover_url != self._cover_url:
+            self._cover_url = cover_url
+            _CoverLoader(cover_url, self.cover_ready.emit).start()
+        self.timer.start(250)
+
+    def stop(self) -> None:
+        self.timer.stop()
+
+    # -- cover ------------------------------------------------------------
+
+    def _placeholder(self) -> None:
+        self.cover.setText("")
+        self.cover.setStyleSheet(
+            f"QLabel#Cover {{ background:{theme.PANEL_ALT}; border-radius:16px;"
+            f" color:{theme.TEXT_FAINT}; }}")
+        self.cover.setText("暂无封面")
+
+    def _apply_cover(self, data: bytes) -> None:
+        pixmap = QPixmap()
+        if not pixmap.loadFromData(data):
+            return
+        scaled = pixmap.scaled(320, 320, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+        self.cover.setPixmap(scaled)
+        self.cover.setStyleSheet("QLabel#Cover { border-radius:16px; }")
+
+    # -- lyrics follow ----------------------------------------------------
+
+    def _tick(self) -> None:
+        if self._player is None or not self._stamps:
+            return
+        position = self._player.position()
+        target = -1
+        for index, stamp in enumerate(self._stamps):
+            if stamp is None:
+                continue
+            if stamp <= position:
+                target = index
+            else:
+                break
+        if target == self._current:
+            return
+        self._current = target
+        self._highlight(target)
+
+    def _highlight(self, target: int) -> None:
+        normal = QFont(self.font())
+        normal.setPointSizeF(10.5)
+        active = QFont(self.font())
+        active.setPointSizeF(12.0)
+        active.setBold(True)
+        for index in range(self.lyrics.count()):
+            item = self.lyrics.item(index)
+            item.setFont(active if index == target else normal)
+            item.setForeground(QColor(theme.ACCENT if index == target else theme.TEXT_DIM))
+        if 0 <= target < self.lyrics.count():
+            self.lyrics.scrollToItem(self.lyrics.item(target), QListWidget.PositionAtCenter)

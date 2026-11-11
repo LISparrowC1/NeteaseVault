@@ -1,0 +1,1 @@
+"""NeteaseVault application package."""
