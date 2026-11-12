@@ -11,9 +11,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
-                               QPushButton, QTableWidget, QTableWidgetItem,
-                               QVBoxLayout)
+from PySide6.QtWidgets import (QCheckBox, QDialog, QFileDialog, QHBoxLayout,
+                               QHeaderView, QLabel, QPushButton, QTableWidget,
+                               QTableWidgetItem, QVBoxLayout)
 
 from ..config import engine_dir, load_config
 from ..core import source_fetcher
@@ -75,6 +75,9 @@ class SourceManagerDialog(QDialog):
         self.up_btn.clicked.connect(lambda: self._move_script(-1))
         self.down_btn = QPushButton("下移")
         self.down_btn.clicked.connect(lambda: self._move_script(1))
+        self.auto_sort_btn = QPushButton("按测试结果排序")
+        self.auto_sort_btn.clicked.connect(self._auto_sort)
+        self.auto_sort_after = QCheckBox("检查后自动排序")
         self.health_btn = QPushButton("全部健康检查")
         self.health_btn.setObjectName("Accent")
         self.health_btn.clicked.connect(self._health)
@@ -86,20 +89,22 @@ class SourceManagerDialog(QDialog):
         row.addWidget(self.spec_btn)
         row.addWidget(self.up_btn)
         row.addWidget(self.down_btn)
+        row.addWidget(self.auto_sort_btn)
+        row.addWidget(self.auto_sort_after)
         row.addWidget(self.health_btn)
         row.addStretch(1)
         row.addWidget(close)
         layout.addLayout(row)
 
         self.finished.connect(self._cleanup)
-        self._drop_internal_shim()
         self.reload()
 
     # -- loading ----------------------------------------------------------
 
     def _set_busy(self, busy: bool, message: str = "") -> None:
         for button in (self.refresh_btn, self.import_btn, self.fetch_btn,
-                       self.up_btn, self.down_btn, self.health_btn):
+                       self.up_btn, self.down_btn, self.auto_sort_btn,
+                       self.health_btn):
             button.setEnabled(not busy)
         self.status.setText(message)
 
@@ -156,14 +161,35 @@ class SourceManagerDialog(QDialog):
         target = row + delta
         if row < 0 or not 0 <= target < len(self.rows):
             return
-        for column in range(self.table.columnCount()):
-            first = self.table.takeItem(row, column)
-            second = self.table.takeItem(target, column)
-            self.table.setItem(row, column, second)
-            self.table.setItem(target, column, first)
-        self.rows[row], self.rows[target] = self.rows[target], self.rows[row]
-        self.store.set_script_priorities([entry["file"] for entry in self.rows])
+        order = list(range(len(self.rows)))
+        order[row], order[target] = order[target], order[row]
+        self._apply_order(order)
         self.table.selectRow(target)
+
+    def _apply_order(self, order: list[int]) -> None:
+        items = [[self.table.takeItem(row, column)
+                  for column in range(self.table.columnCount())]
+                 for row in range(self.table.rowCount())]
+        old_rows = self.rows
+        self.table.setRowCount(0)
+        self.table.setRowCount(len(order))
+        for new_index, old_index in enumerate(order):
+            for column, item in enumerate(items[old_index]):
+                self.table.setItem(new_index, column, item)
+        self.rows = [old_rows[index] for index in order]
+        self.store.set_script_priorities([entry["file"] for entry in self.rows])
+
+    def _auto_sort(self) -> None:
+        states = self.store.script_state()
+
+        def key(index: int) -> tuple:
+            state = states.get(self.rows[index]["file"], {})
+            checked = state.get("last_check_ok")
+            tier = 0 if checked == 1 else (1 if checked is None else 2)
+            latency = state.get("last_latency_ms")
+            return (tier, latency if latency is not None else 10 ** 9, index)
+
+        self._apply_order(sorted(range(len(self.rows)), key=key))
 
     def _on_error(self, message: str) -> None:
         self._set_busy(False, "加载失败")
@@ -171,45 +197,12 @@ class SourceManagerDialog(QDialog):
 
     # -- actions ----------------------------------------------------------
 
-    def _drop_internal_shim(self) -> None:
-        """Remove a copy of the bundled host shim mistaken for a source script."""
-        bundled = engine_dir() / "host" / "lx-shim.js"
-        candidate = self.scripts_dir / "lx-shim.js"
-        try:
-            if (candidate.exists() and bundled.exists()
-                    and candidate.read_bytes() == bundled.read_bytes()):
-                candidate.unlink()
-        except OSError:
-            pass
-
-    @staticmethod
-    def _looks_like_source(path: Path, text: str) -> bool:
-        if path.name.lower() == "lx-shim.js":
-            return False
-        return source_fetcher.is_source(text)
-
     def _import(self) -> None:
         start = (QStandardPaths.writableLocation(QStandardPaths.DownloadLocation)
                  or str(Path.home()))
         files, _ = QFileDialog.getOpenFileNames(self, "选择源脚本", start,
                                                 "JavaScript (*.js)")
         if not files:
-            return
-        invalid = []
-        for path in files:
-            try:
-                text = Path(path).read_text(encoding="utf-8-sig", errors="ignore")
-            except OSError:
-                invalid.append(Path(path).name)
-                continue
-            if not self._looks_like_source(Path(path), text):
-                invalid.append(Path(path).name)
-        if invalid:
-            QMessageBox.warning(
-                self, "不是音源脚本",
-                "以下文件不是 LX 音源脚本，已停止导入：\n"
-                + "\n".join(invalid)
-                + "\n\n请选择带有 @name 和 lx.send('inited', ...) 的源脚本。")
             return
         target = self.scripts_dir
         target.mkdir(parents=True, exist_ok=True)
@@ -332,6 +325,8 @@ class SourceManagerDialog(QDialog):
             cell.setToolTip(note or ("可用" if ok else "解析失败"))
             cell.setForeground(Qt.green if ok else Qt.yellow)
         ok_count = sum(1 for _, ok, _, _ in results if ok)
+        if self.auto_sort_after.isChecked():
+            self._auto_sort()
         self._set_busy(False, f"健康检查完成：{ok_count}/{len(results)} 可用")
 
     def _cleanup(self, *_args) -> None:

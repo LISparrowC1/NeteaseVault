@@ -1,12 +1,17 @@
 # NeteaseVault
 
+当前版本：**1.2.9**
+
 网易云音乐「我喜欢的音乐」归档工具：同步歌单 → 多源下载 → 严格校验 → 本地长期保存。
 
 ## 功能
 
 - 同步「我喜欢的音乐」全部曲目，记录顺序、时长、云端音质与可播状态
-- 多引擎下载：musicdl、自定义源脚本、官方接口，顺序可调；自定义源可从公开活跃仓库自动拉取并用真实歌曲实测
+- 多引擎下载：musicdl、自定义源脚本、官方接口，按设置里的顺序执行；自定义源可从公开活跃仓库自动拉取并用真实歌曲实测
+- 自定义源可手动上移/下移，也可按健康检查结果自动排序
+- 健康检查取云端歌单第一首未下载歌曲，不依赖本地曲库或内置样本
 - 音源仓库列表保存在 `data/source_repos.json`，可自行增删
+- 设置缓存页可分别清理封面、暂存、临时文件、musicdl 输出和自动获取的音源
 - 严格匹配：同一 `song_id` 的官方/自定义源候选直接视为同一首；搜索候选要求歌名/歌手/专辑归一化后完全相等、时长整秒相等且候选唯一，否则转人工
 - 假无损检测：入库前解码 PCM，按频谱截止、码率与高频断崖判断，灰区转人工
 - 暂存区校验后原子入库，文件名固定为 `歌名 - 歌手.ext`，标签只保留四项
@@ -52,15 +57,23 @@ MIT
 
 # NeteaseVault (English)
 
+Current version: **1.2.9**
+
 Archive tool for NetEase Cloud Music "Liked Songs": sync the playlist, download tracks,
 validate them strictly and keep a local library that stays playable.
 
 ## Features
 
 - Syncs the whole playlist with order, duration, quality and playability
-- Multiple download engines (musicdl, custom source scripts, official API); custom
-  sources can be auto-fetched from active public repositories and tested with real songs
+- Multiple download engines (musicdl, custom source scripts, official API) in the
+  configured order; custom sources can be auto-fetched from active public
+  repositories and tested with real songs
+- Custom sources can be reordered manually or sorted by health-check results
+- Health checks use the first not-yet-downloaded song from the cloud playlist;
+  neither the local library nor a built-in sample is used
 - The repository list is editable at `data/source_repos.json`
+- Cache settings can clear covers, staging, temporary files, musicdl output and
+  auto-fetched source scripts independently
 - A single matching `song_id` from the official/custom-source channels is authoritative;
   search candidates must pass normalized title/artist/album equality, whole-second
   duration equality, and be unique, otherwise they go to manual review

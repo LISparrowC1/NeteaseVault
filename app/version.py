@@ -1,4 +1,4 @@
 """Single source of truth for the program version."""
 
-__version__ = "1.2.8"
+__version__ = "1.2.9"
 APP_NAME = "NeteaseVault"

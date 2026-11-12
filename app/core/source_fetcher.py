@@ -48,8 +48,6 @@ class Repo:
 
 DEFAULT_REPOS = [
     Repo("pdone", "lx-music-source", "main", ends="/latest.js", limit=3),
-    Repo("pdone", "lx-music-source", "main", starts="xinghai/",
-         ends="latest.js", limit=1),
     Repo("guoyue2010", "lxmusic-", "main", starts="V2603_latest/",
          ends=".js", limit=3),
     Repo("shellsec", "lx-music-source", "master", starts="sources/",
@@ -58,8 +56,6 @@ DEFAULT_REPOS = [
     Repo("Lingeng27", "lx-music-1010-source", "main", ends=".js", limit=1),
     Repo("LuoXiaohei-2025", "LX-music-collection", "main",
          starts="Source of music/", ends=".js", limit=1),
-    Repo("LuoXiaohei-2025", "LX-music-collection", "main",
-         starts="Source of music/", contains="星海", ends=".js", limit=1),
     Repo("jiaru1", "yinyueyuan", "main", ends="latest.js", limit=1),
     Repo("xiaoxiansheng-123", "lx-music-source", "main",
          ends=".js", limit=3),
@@ -69,8 +65,6 @@ DEFAULT_FALLBACK = [
     ("pdone", "changqing/latest.js"),
     ("pdone", "feichangdao/latest.js"),
     ("pdone", "fish/latest.js"),
-    ("shellsec", "sources/xinghai/星海音乐源.js"),
-    ("LuoXiaohei-2025", "Source of music/星海音乐源.js"),
 ]
 
 REPOS = DEFAULT_REPOS
