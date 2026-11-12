@@ -61,11 +61,9 @@ class LoginDialog(QDialog):
         self.open_btn.clicked.connect(self._open_page)
         self.paste_btn = QPushButton("从剪贴板粘贴")
         self.paste_btn.clicked.connect(self._paste)
-        self.check_btn = QPushButton("检查登录状态")
-        self.check_btn.clicked.connect(self._check)
         self.clear_btn = QPushButton("清除已保存的登录数据")
         self.clear_btn.clicked.connect(self._clear)
-        for button in (self.open_btn, self.paste_btn, self.check_btn, self.clear_btn):
+        for button in (self.open_btn, self.paste_btn, self.clear_btn):
             row.addWidget(button)
         row.addStretch(1)
         layout.addLayout(row)
@@ -97,20 +95,6 @@ class LoginDialog(QDialog):
         if not cookie:
             QMessageBox.warning(self, "没找到 MUSIC_U",
                                 "剪贴板内容里没有 MUSIC_U，请确认复制的是完整 Cookie。")
-
-    def _check(self) -> None:
-        cookie = self._current_cookie()
-        if not cookie:
-            QMessageBox.warning(self, "没有凭证", "请先粘贴 Cookie。")
-            return
-        try:
-            profile = NeteaseClient(cookie).account()
-        except Exception as exc:
-            QMessageBox.critical(self, "检查失败", str(exc))
-            return
-        QMessageBox.information(
-            self, "登录有效",
-            f"已登录：{profile.get('nickname') or '（无昵称）'}\nUID：{profile['userId']}")
 
     def _clear(self) -> None:
         self.credentials.clear()

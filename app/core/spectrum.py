@@ -209,7 +209,7 @@ def render_spectrogram(path: Path, *, width: int = 900, height: int = 320,
     col_sums = np.add.reduceat(rows, col_bounds[:-1], axis=1)
     col_counts = np.maximum(1, np.diff(col_bounds))
     columns = (col_sums / col_counts).astype(np.float32)
-    columns = np.clip((columns + 120.0) / 100.0, 0.0, 1.0)
+    columns = np.clip((columns + 120.0) / 120.0, 0.0, 1.0)
     if progress is not None:
         progress(1.0)
     return Spectrogram(columns, total / rate, rate, rate / 2.0)

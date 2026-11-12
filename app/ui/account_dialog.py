@@ -67,25 +67,30 @@ class AccountDialog(QDialog):
         else:
             self.info.setText("已保存凭证，但还没有同步过账户信息。\n点「检查登录状态」即可读取。")
 
-    def _check(self) -> None:
+    def _check(self, silent: bool = False) -> None:
         cookie = self.credentials.load_cookie()
         if not cookie:
-            QMessageBox.information(self, "未登录", "本地没有凭证，请先登录。")
+            if not silent:
+                QMessageBox.information(self, "未登录", "本地没有凭证，请先登录。")
             return
         try:
             profile = NeteaseClient(cookie).account()
         except Exception as exc:
-            QMessageBox.critical(self, "检查失败", str(exc))
+            if not silent:
+                QMessageBox.critical(self, "检查失败", str(exc))
             return
         self.store.set_meta("account_uid", str(profile["userId"]))
         self.store.set_meta("account_nickname", str(profile.get("nickname") or ""))
         self._refresh_label()
-        QMessageBox.information(self, "登录有效", f"昵称：{profile.get('nickname')}\nUID：{profile['userId']}")
+        if not silent:
+            QMessageBox.information(
+                self, "登录有效",
+                f"昵称：{profile.get('nickname')}\nUID：{profile['userId']}")
 
     def _relogin(self) -> None:
         dialog = LoginDialog(self.credentials, self)
         if dialog.exec():
-            self._check()
+            self._check(silent=True)
 
     def _clear(self) -> None:
         self.credentials.clear()

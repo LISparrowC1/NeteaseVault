@@ -10,7 +10,7 @@
 - 假无损检测：入库前解码 PCM，按频谱截止、码率与高频断崖判断，灰区转人工
 - 暂存区校验后原子入库，文件名固定为 `歌名 - 歌手.ext`，标签只保留四项
 - 七个视图：网易歌单、已取消喜欢、失效、等待下载、待确认、匹配失败、已下载
-- 内置播放器；播放页可切换歌词/整首频谱，播放栏内有 25% 不透明窄柱实时频谱
+- 内置播放器；播放页可切换歌词/整首频谱，左栏下方显示镜像实时频谱
 - Cookie 登录，凭证用 Windows DPAPI 加密
 - 绿色安装包：安装后整个目录可移动，删除目录即卸载，不写注册表/AppData
 
@@ -66,8 +66,8 @@ validate them strictly and keep a local library that stays playable.
 - Staging area, validation, atomic move into the library
 - Fixed naming (`Title - Artist.ext`) and a four-field tag whitelist
 - Seven views: playlist, unliked, unavailable, waiting, review, failed, downloaded
-- Built-in player with lyrics and a full-track spectrum view; the player bar can show
-  a live 25%-opacity narrow-bar spectrum without increasing its height
+- Built-in player with lyrics and a full-track spectrum view; the now-playing page
+  also shows a compact mirrored live spectrum under the left-side switch
 - Cookie login, credentials encrypted with Windows DPAPI
 - Green installer: the installed folder is movable and deleting it uninstalls the app;
   no registry or AppData writes

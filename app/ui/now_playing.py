@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem
 
 from ..core import covers
 from . import theme
+from .spectrum_bar import LiveSpectrum
 from .spectrum_view import SegmentedControl, SpectrumView
 
 
@@ -113,6 +114,11 @@ class NowPlayingPage(QWidget):
         self.mode = SegmentedControl()
         self.mode.changed.connect(self._set_mode)
         left.addWidget(self.mode, 0, Qt.AlignLeft)
+        live_label = QLabel("实时频谱")
+        live_label.setStyleSheet(f"color:{theme.TEXT_FAINT}; font-size:10px;")
+        left.addWidget(live_label)
+        self.live = LiveSpectrum()
+        left.addWidget(self.live)
         left.addStretch(1)
         body.addLayout(left)
 
@@ -141,6 +147,7 @@ class NowPlayingPage(QWidget):
         self.mode.set_index(0)
         self.content.setCurrentIndex(0)
         self.spectrum.clear()
+        self.live.set_track(path, player)
         self.title.setText(title or path.stem)
         self.meta.setText("\n".join(part for part in (artist, album) if part))
         self._player = player
@@ -171,9 +178,19 @@ class NowPlayingPage(QWidget):
 
     def stop(self) -> None:
         self.timer.stop()
+        self.live.stop()
         self.spectrum.shutdown()
         self.mode.set_index(0)
         self.content.setCurrentIndex(0)
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if self._path is not None and self._player is not None:
+            self.live.set_active(True)
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        self.live.set_active(False)
+        super().hideEvent(event)
 
     def _set_mode(self, index: int) -> None:
         self.content.setCurrentIndex(1 if index else 0)

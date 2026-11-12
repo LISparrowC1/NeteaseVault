@@ -18,17 +18,21 @@ from . import theme
 
 
 def _palette(levels: np.ndarray) -> np.ndarray:
-    """Blue -> violet -> purple; transparent at silence."""
-    stops = np.array([0.0, 0.08, 0.30, 0.55, 0.78, 1.0], dtype=np.float32)
-    red = np.array([8, 16, 38, 92, 168, 224], dtype=np.float32)
-    green = np.array([12, 28, 72, 48, 52, 92], dtype=np.float32)
-    blue = np.array([36, 96, 178, 220, 236, 255], dtype=np.float32)
-    alpha = np.array([0, 110, 200, 235, 250, 255], dtype=np.float32)
+    """Spek's default SoX palette, with the 0..-120 dB range."""
+    level = np.clip(levels, 0.0, 1.0)
+    red = np.where(level >= 0.73, 1.0,
+                   np.where(level >= 0.13,
+                            np.sin((level - 0.13) / 0.60 * np.pi / 2.0), 0.0))
+    green = np.where(level >= 0.91, 1.0,
+                     np.where(level >= 0.60,
+                              np.sin((level - 0.60) / 0.31 * np.pi / 2.0), 0.0))
+    blue = np.where(level < 0.60, 0.5 * np.sin(level / 0.60 * np.pi),
+                    np.where(level >= 0.78, (level - 0.78) / 0.22, 0.0))
     out = np.empty(levels.shape + (4,), dtype=np.uint8)
-    out[..., 0] = np.interp(levels, stops, red)
-    out[..., 1] = np.interp(levels, stops, green)
-    out[..., 2] = np.interp(levels, stops, blue)
-    out[..., 3] = np.interp(levels, stops, alpha)
+    out[..., 0] = np.clip(red * 255.0 + 0.5, 0, 255)
+    out[..., 1] = np.clip(green * 255.0 + 0.5, 0, 255)
+    out[..., 2] = np.clip(blue * 255.0 + 0.5, 0, 255)
+    out[..., 3] = 255
     return out
 
 

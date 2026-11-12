@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QSizePo
 
 from . import theme
 from .icons import outline_icon
-from .spectrum_bar import SpectrumBar
 
 
 def _fmt(ms: int) -> str:
@@ -116,11 +115,6 @@ class PlayerBar(QFrame):
         outer.setContentsMargins(18, 6, 18, 8)
         outer.setSpacing(2)
 
-        self.spectrum_bar = SpectrumBar(self._player, self)
-        self.spectrum_bar.setVisible(False)
-        self.spectrum_bar.lower()
-        self._place_spectrum()
-
         # -- thin top row: title + artist ---------------------------------
         top = QHBoxLayout()
         top.setSpacing(10)
@@ -198,18 +192,6 @@ class PlayerBar(QFrame):
         self.queue_btn.clicked.connect(self.queue_clicked.emit)
         row.addWidget(self.queue_btn, 0, Qt.AlignRight)
 
-        self.spectrum_btn = QPushButton()
-        self.spectrum_btn.setObjectName("TransportButton")
-        self.spectrum_btn.setCheckable(True)
-        self.spectrum_btn.setIcon(outline_icon("spectrum"))
-        self.spectrum_btn.setIconSize(QSize(18, 18))
-        self.spectrum_btn.setFixedSize(30, 28)
-        self.spectrum_btn.setToolTip("显示/隐藏实时频谱")
-        self.spectrum_btn.setCursor(Qt.PointingHandCursor)
-        self.spectrum_btn.setFocusPolicy(Qt.NoFocus)
-        self.spectrum_btn.toggled.connect(self._toggle_spectrum)
-        row.addWidget(self.spectrum_btn, 0, Qt.AlignRight)
-
         outer.addLayout(row)
 
         self.play_btn.clicked.connect(self.toggle)
@@ -229,7 +211,6 @@ class PlayerBar(QFrame):
         self._current = path
         self.title.setText(title or path.stem)
         self.subtitle.setText(subtitle)
-        self.spectrum_bar.set_path(path)
         self._player.setSource(QUrl.fromLocalFile(str(path)))
         self._player.play()
 
@@ -267,23 +248,6 @@ class PlayerBar(QFrame):
         self.subtitle.setText("")
         self.progress.setValue(0)
         self.time.setText("0:00 / 0:00")
-        self.spectrum_bar.set_path(None)
-        self.spectrum_btn.setChecked(False)
-
-    def _toggle_spectrum(self, checked: bool) -> None:
-        self.spectrum_bar.setVisible(checked)
-        self.spectrum_bar.set_active(checked)
-        self.spectrum_bar.lower()
-        if checked and self._current is not None:
-            self.spectrum_bar.set_path(self._current)
-
-    def _place_spectrum(self) -> None:
-        self.spectrum_bar.setGeometry(0, max(0, self.height() - 26),
-                                      self.width(), 26)
-
-    def resizeEvent(self, event) -> None:  # noqa: N802
-        super().resizeEvent(event)
-        self._place_spectrum()
 
     # -- slots ------------------------------------------------------------
 

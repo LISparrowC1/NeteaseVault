@@ -461,6 +461,9 @@ class MainWindow(QMainWindow):
         self.clear_list_btn.setVisible(
             self.list_key in (states.LIST_REMOVED, states.LIST_REVIEW,
                               states.LIST_DOWNLOADED, states.LIST_FAILED))
+        self.download_btn.setVisible(self.list_key != states.LIST_DOWNLOADED)
+        self.pause_btn.setVisible(self._downloading)
+        self.cancel_btn.setVisible(self._downloading)
         self._update_download_label()
         self.progress.setVisible(self.list_key == states.LIST_WAITING and self._downloading)
         self.delegate.list_key = self.list_key
@@ -627,10 +630,19 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
 
     def _remove_row(self, row) -> None:
-        answer = QMessageBox.question(self, "从列表中移除",
-                                      "只从数据库移除这条记录，本地文件保留。继续吗？")
-        if answer != QMessageBox.Yes:
+        box = QMessageBox(self)
+        box.setWindowTitle("从列表中移除")
+        box.setText("将从数据库移除这条记录。")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        checkbox = None
+        if row["local_rel_path"]:
+            checkbox = QCheckBox("同时删除本地文件（移到回收站）")
+            box.setCheckBox(checkbox)
+        if box.exec() != QMessageBox.Yes:
             return
+        if checkbox is not None and checkbox.isChecked():
+            path = path_setting(self.config, "library") / row["local_rel_path"]
+            _recycle(path)
         self.store.delete_tracks([int(row["song_id"])])
         self.reload_tracks()
 
@@ -704,6 +716,7 @@ class MainWindow(QMainWindow):
             return
         self.sync_btn.setEnabled(False)
         self.sync_btn.setText("同步中…")
+        self.now_page.live.set_active(False)
         self.status_label.setVisible(True)
         self.status_label.setText("正在同步歌单…")
         self._sync_worker = SyncWorker(self.db_path, cookie)
@@ -714,6 +727,7 @@ class MainWindow(QMainWindow):
     def _on_sync_done(self, report) -> None:
         self.sync_btn.setEnabled(True)
         self.sync_btn.setText("同步")
+        self.now_page.live.set_active(self.now_page.isVisible())
         self.status_label.setVisible(False)
         self._refresh_account_card()
         # The cloud list just changed; re-derive which files are already downloaded.
@@ -732,6 +746,8 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "同步完成", body)
 
     def _on_worker_failed(self, message: str) -> None:
+        self._downloading = False
+        self.now_page.live.set_active(self.now_page.isVisible())
         self.sync_btn.setEnabled(True)
         self.sync_btn.setText("同步")
         self.download_btn.setEnabled(True)
@@ -739,6 +755,7 @@ class MainWindow(QMainWindow):
         self.pause_btn.setEnabled(False)
         self.progress.setVisible(False)
         self.status_label.setVisible(False)
+        self._apply_view_state()
         QMessageBox.critical(self, "操作失败", message)
 
     # -- download ---------------------------------------------------------
@@ -777,6 +794,8 @@ class MainWindow(QMainWindow):
         self.pause_btn.setEnabled(True)
         self.pause_btn.setText("暂停")
         self._downloading = True
+        self.pause_btn.setVisible(True)
+        self.cancel_btn.setVisible(True)
         self.progress.setVisible(self.list_key == states.LIST_WAITING)
         self.progress.setRange(0, len(ids))
         self.progress.setValue(0)
@@ -847,6 +866,7 @@ class MainWindow(QMainWindow):
         self.cancel_btn.setEnabled(False)
         self.cancel_btn.setVisible(False)
         self.progress.setVisible(False)
+        self._apply_view_state()
         self.status_label.setVisible(False)
         self.setWindowTitle(f"NeteaseVault {__version__}")
         self.model.clear_progress()
@@ -867,6 +887,13 @@ class MainWindow(QMainWindow):
             self.reload_tracks()
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        if self._sync_worker is not None and self._sync_worker.isRunning():
+            if not self._sync_worker.wait(5000):
+                QMessageBox.information(
+                    self, "正在同步",
+                    "歌单同步还没完成，请等它结束后再关闭，避免数据库被中断。")
+                event.ignore()
+                return
         if self._download_worker is not None and self._download_worker.isRunning():
             self._download_worker.stop()
             self._download_worker.wait(3000)
