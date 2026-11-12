@@ -881,7 +881,8 @@ class MainWindow(QMainWindow):
     # -- misc -------------------------------------------------------------
 
     def open_settings(self) -> None:
-        dialog = SettingsDialog(self.config, self.store, self)
+        dialog = SettingsDialog(self.config, self.store, self,
+                                credentials=self.credentials)
         if dialog.exec():
             self.config = load_config()
             self.reload_tracks()

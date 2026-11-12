@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPixmap
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                                QPushButton, QStackedWidget, QVBoxLayout, QWidget)
@@ -113,6 +113,9 @@ class NowPlayingPage(QWidget):
         self.mode = SegmentedControl()
         self.mode.changed.connect(self._set_mode)
         left.addWidget(self.mode, 0, Qt.AlignLeft)
+        self.live = LiveSpectrum()
+        self.live.hide()
+        left.addWidget(self.live, 0, Qt.AlignLeft)
         left.addStretch(1)
         body.addLayout(left)
 
@@ -122,10 +125,6 @@ class NowPlayingPage(QWidget):
         self.lyrics.setSelectionMode(QListWidget.NoSelection)
         self.lyrics.setVerticalScrollMode(QListWidget.ScrollPerPixel)
         self.spectrum = SpectrumView()
-        self.live = LiveSpectrum(self.spectrum)
-        self.live.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.live.hide()
-        self.spectrum.installEventFilter(self)
         self.content = QStackedWidget()
         self.content.addWidget(self.lyrics)
         self.content.addWidget(self.spectrum)
@@ -195,42 +194,23 @@ class NowPlayingPage(QWidget):
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
-        self._position_live()
         self.resume_live()
 
     def hideEvent(self, event) -> None:  # noqa: N802
         self.live.set_active(False)
         super().hideEvent(event)
 
-    def eventFilter(self, obj, event) -> bool:  # noqa: N802
-        if obj is self.spectrum and event.type() == QEvent.Resize:
-            self._position_live()
-        return super().eventFilter(obj, event)
-
-    def _position_live(self) -> None:
-        left, right, bottom = 46, 20, 24
-        width = max(0, self.spectrum.width() - left - right)
-        y = max(0, self.spectrum.height() - bottom - 55)
-        self.live.setGeometry(left, y, width, 55)
-        self.live.raise_()
-
     def resume_live(self) -> None:
         spectrum_mode = self.mode.current() == 1
-        self.live.setVisible(spectrum_mode and self.isVisible())
-        if spectrum_mode and self.isVisible() and self._path is not None:
-            self._position_live()
-            self.live.set_active(True)
-        else:
-            self.live.set_active(False)
+        visible = spectrum_mode and self.isVisible() and self._path is not None
+        self.live.setVisible(visible)
+        self.live.set_active(visible)
 
     def _set_mode(self, index: int) -> None:
         self.content.setCurrentIndex(1 if index else 0)
-        self.live.setVisible(bool(index) and self.isVisible())
-        if index:
-            self._position_live()
-            self.live.raise_()
-        self.live.set_active(
-            bool(index) and self.isVisible() and self._path is not None)
+        visible = bool(index) and self.isVisible() and self._path is not None
+        self.live.setVisible(visible)
+        self.live.set_active(visible)
         if index and self._path is not None:
             self.spectrum.show_path(self._path)
         else:

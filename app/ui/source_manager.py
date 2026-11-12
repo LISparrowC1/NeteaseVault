@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QHeaderView, Q
 from ..config import engine_dir, load_config
 from ..core.channels.source_channel import music_info
 from ..core.engine_client import EngineClient
+from ..core.netease import NeteaseClient
 from ..db.store import Store
 from . import theme
 from .messagebox import QMessageBox
@@ -24,11 +25,12 @@ from .workers import Worker
 
 
 class SourceManagerDialog(QDialog):
-    def __init__(self, store: Store, parent=None):
+    def __init__(self, store: Store, parent=None, credentials=None):
         super().__init__(parent)
         self.setWindowTitle("自定义源管理")
         self.resize(880, 500)
         self.store = store
+        self.credentials = credentials
         self.config = load_config()
         self.engine = EngineClient(engine_dir())
         self.rows: list[dict] = []
@@ -179,25 +181,48 @@ class SourceManagerDialog(QDialog):
         self.reload()
 
     def _health(self) -> None:
-        rows = self.store.list_tracks()
-        sample = next((row for row in rows if row["cloud_playable"]), None)
-        if sample is None and rows:
-            sample = rows[0]
-        if sample is None:
-            QMessageBox.warning(
-                self, "没有样本",
-                "健康检查需要一首真实曲目。请先同步「我喜欢的音乐」，再回来检查。")
-            return
-        info = music_info(sample)
         targets = [row for row in self.rows
                    if not row.get("error") and "wy" in (row.get("sources") or {})]
         if not targets:
             QMessageBox.information(self, "没有可检查的源", "当前没有支持网易云的脚本。")
             return
+        if self.credentials is None or not self.credentials.has_cookie():
+            QMessageBox.warning(self, "未登录", "健康检查需要登录后从云端歌单取样本。")
+            return
 
-        self._set_busy(True, "正在逐个检查…")
+        self._set_busy(True, "正在从云端「我喜欢的音乐」取样本…")
 
         def work():
+            client = NeteaseClient(self.credentials.load_cookie(), min_interval=1.2)
+            profile = client.account()
+            playlist_id = client.liked_playlist_id(int(profile["userId"]))
+            entries = client.playlist_track_ids(playlist_id)
+            if not entries:
+                raise RuntimeError("「我喜欢的音乐」为空，无法取样本")
+
+            probe = Store(self.store.db_path)
+            try:
+                existing = probe.existing_track_ids()
+            finally:
+                probe.close()
+
+            def downloaded(entry) -> bool:
+                row = existing.get(int(entry["id"]))
+                return bool(row and row["local_rel_path"])
+
+            chosen = next((entry for entry in entries if not downloaded(entry)), entries[0])
+            details = client.songs_detail([chosen["id"]])
+            if not details:
+                raise RuntimeError("云端没有返回样本歌曲详情")
+            song = details[0]
+            info = music_info({
+                "song_id": int(song["id"]),
+                "title": song.get("name"),
+                "artist": "、".join(a.get("name", "") for a in (song.get("ar") or [])),
+                "album": (song.get("al") or {}).get("name"),
+                "duration_ms": song.get("dt"),
+            })
+
             results = []
             for row in targets:
                 qualities = row["sources"]["wy"].get("qualitys") or []
@@ -206,9 +231,11 @@ class SourceManagerDialog(QDialog):
                 try:
                     self.engine.call("resolve", {"file": row["file"], "source": "wy",
                                                  "quality": quality, "musicInfo": info}, timeout=40)
-                    results.append((row["file"], True, int((time.monotonic() - started) * 1000), ""))
+                    results.append((row["file"], True,
+                                    int((time.monotonic() - started) * 1000), ""))
                 except Exception as exc:
-                    results.append((row["file"], False, int((time.monotonic() - started) * 1000),
+                    results.append((row["file"], False,
+                                    int((time.monotonic() - started) * 1000),
                                     str(exc)[:120]))
             return results
 

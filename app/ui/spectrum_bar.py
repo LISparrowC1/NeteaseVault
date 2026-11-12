@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtWidgets import QWidget
 
 from ..core.spectrum import live_levels
 
@@ -24,9 +24,7 @@ class LiveSpectrum(QWidget):
         self._path: Path | None = None
         self._active = False
         self._levels = [0.0] * self.BANDS
-        self.setFixedHeight(55)
-        self.setMinimumWidth(0)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setFixedSize(300, 55)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
         self._timer = QTimer(self)

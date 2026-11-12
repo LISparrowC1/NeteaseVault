@@ -16,12 +16,13 @@ CHANNEL_LABELS = {"musicdl": "musicdl", "source": "自定义源", "official": "�
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, config: dict, store=None, parent=None):
+    def __init__(self, config: dict, store=None, parent=None, credentials=None):
         super().__init__(parent)
         self.setWindowTitle("设置")
         self.resize(620, 460)
         self.config = config
         self.store = store
+        self.credentials = credentials
 
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
@@ -264,7 +265,7 @@ class SettingsDialog(QDialog):
     def _open_sources(self) -> None:
         from .source_manager import SourceManagerDialog
 
-        SourceManagerDialog(self.store, self).exec()
+        SourceManagerDialog(self.store, self, credentials=self.credentials).exec()
 
     # -- helpers ----------------------------------------------------------
 
