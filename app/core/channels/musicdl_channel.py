@@ -11,6 +11,7 @@ import logging
 import tempfile
 from typing import Any, Sequence
 
+from ...config import temp_dir
 from .base import Candidate
 
 log = logging.getLogger(__name__)
@@ -56,9 +57,11 @@ class MusicdlChannel:
         artist = track["artist"] or ""
         keyword = f"{title} {artist}".strip()
         try:
-            # musicdl writes search_results.pkl under client.work_dir; point it at a
-            # throw-away directory so nothing appears next to the program.
-            with tempfile.TemporaryDirectory(prefix="nv-musicdl-") as work:
+            # musicdl writes search_results.pkl under client.work_dir; keep it in
+            # data/tmp so the program still writes only inside its own folder.
+            work_root = temp_dir()
+            work_root.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix="musicdl-", dir=work_root) as work:
                 client.work_dir = work
                 results = client.search(keyword=keyword)
         except Exception as exc:  # network / parser problems are ordinary failures

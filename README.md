@@ -6,12 +6,13 @@
 
 - 同步「我喜欢的音乐」全部曲目，记录顺序、时长、云端音质与可播状态
 - 多引擎下载：musicdl、自定义源脚本、官方接口，顺序可调
-- 严格匹配：歌名/歌手/专辑归一化后完全相等、时长整秒相等、候选唯一，否则转人工确认
-- 假无损检测：按 18–22 kHz 高频能量判断，可疑文件转人工
+- 严格匹配：同一 `song_id` 的官方/自定义源候选直接视为同一首；搜索候选要求歌名/歌手/专辑归一化后完全相等、时长整秒相等且候选唯一，否则转人工
+- 假无损检测：入库前解码 PCM，按频谱截止、码率与高频断崖判断，灰区转人工
 - 暂存区校验后原子入库，文件名固定为 `歌名 - 歌手.ext`，标签只保留四项
 - 七个视图：网易歌单、已取消喜欢、失效、等待下载、待确认、匹配失败、已下载
-- 内置播放器，整页歌词随播放位置滚动，独立播放队列
+- 内置播放器；播放页可切换歌词/整首频谱，播放栏可打开实时频谱条
 - Cookie 登录，凭证用 Windows DPAPI 加密
+- 绿色安装包：安装后整个目录可移动，删除目录即卸载，不写注册表/AppData
 
 ## 构建
 
@@ -21,17 +22,22 @@ python -m venv .venv
 pwsh -NoProfile -File build\build.ps1
 ```
 
-产物是项目根目录的单文件 exe。自定义源需要 `runtime\node.exe`。
+构建从源码生成 onedir 程序，再编译绿色安装器；最终安装包写入上一级 `release\`。
+自定义源需要 `runtime\node.exe`。
 
-## 首次运行
+## 安装与运行
 
-程序在自己的同级目录创建所需文件夹，不写系统目录：
+双击 `NeteaseVault-<版本号>-Setup.exe`，选择安装目录（默认“当前目录\NeteaseVault”）。
+安装后目录结构：
 
 ```
 NeteaseVault.exe
-music/     音乐库
-data/      数据库、凭证、日志、缓存、暂存
+_internal/     运行库、引擎、证书
+music/         音乐库
+data/          数据库、凭证、日志、缓存、暂存、自定义源脚本
 ```
+
+除了 `music/`，运行期写入都在 `data/`；目录可整体搬走。删除整个目录即卸载。
 
 ## 登录
 
@@ -53,14 +59,19 @@ validate them strictly and keep a local library that stays playable.
 
 - Syncs the whole playlist with order, duration, quality and playability
 - Multiple download engines (musicdl, custom source scripts, official API)
-- Strict matching: normalized title/artist/album equality, whole-second duration,
-  unique candidate only, otherwise manual review
-- Fake-lossless detection via high-band energy
+- A single matching `song_id` from the official/custom-source channels is authoritative;
+  search candidates must pass normalized title/artist/album equality, whole-second
+  duration equality, and be unique, otherwise they go to manual review
+- Fake-lossless detection decodes PCM before tagging and checks spectral cutoff,
+  bitrate and high-band cliffs; grey cases go to manual review
 - Staging area, validation, atomic move into the library
 - Fixed naming (`Title - Artist.ext`) and a four-field tag whitelist
 - Seven views: playlist, unliked, unavailable, waiting, review, failed, downloaded
-- Built-in player with a full-page scrolling lyrics view and a play queue
+- Built-in player with lyrics and a full-track spectrum view; a live spectrum strip
+  can be toggled from the player bar
 - Cookie login, credentials encrypted with Windows DPAPI
+- Green installer: the installed folder is movable and deleting it uninstalls the app;
+  no registry or AppData writes
 
 ## Build
 
@@ -70,18 +81,24 @@ python -m venv .venv
 pwsh -NoProfile -File build\build.ps1
 ```
 
-A single executable is written to the project root. Custom sources require
-`runtime\node.exe`.
+The build produces an onedir program from source and compiles the green installer;
+the final installer is written to the parent `release\` folder.
+Custom sources require `runtime\node.exe`.
 
-## First run
+## Install and run
 
-The executable creates what it needs next to itself:
+Run `NeteaseVault-<version>-Setup.exe`, choose an install directory (default:
+`current-directory\NeteaseVault`). The installed layout is:
 
 ```
 NeteaseVault.exe
-music/     library
-data/      database, credentials, logs, cache, staging
+_internal/     runtime, engine, certificates
+music/         library
+data/          database, credentials, logs, cache, staging, custom sources
 ```
+
+Apart from `music/`, runtime writes stay in `data/`. The whole folder can be moved;
+delete it to uninstall.
 
 ## Login
 

@@ -11,7 +11,7 @@ const readline = require('readline')
 const { createHost, parseScriptMeta } = require('./host/lx-shim')
 
 const BUNDLED_DIR = path.join(__dirname, 'scripts')
-// User-imported scripts live next to the executable, not inside the bundle.
+// User-imported scripts live under data/engine/scripts, not inside the bundle.
 const userArgIndex = process.argv.indexOf('--user-scripts')
 const USER_DIR = userArgIndex > 0 ? process.argv[userArgIndex + 1] : null
 const hosts = new Map()      // file -> { host, meta, sources, loadedAt }

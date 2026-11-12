@@ -7,7 +7,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from ..config import app_root as _app_root
+from ..config import user_scripts_dir as _user_scripts_dir
 from typing import Any
 
 
@@ -19,7 +19,7 @@ class EngineClient:
     def __init__(self, engine_dir: Path, node_exe: str | None = None,
                  user_scripts_dir: Path | None = None):
         self.engine_dir = engine_dir
-        self.user_scripts_dir = user_scripts_dir or (_app_root() / "engine" / "scripts")
+        self.user_scripts_dir = user_scripts_dir or _user_scripts_dir()
         self._node = node_exe
         self._proc: subprocess.Popen | None = None
         self._lock = threading.Lock()
@@ -45,6 +45,7 @@ class EngineClient:
         script = self.engine_dir / "index.js"
         if not script.exists():
             raise EngineError(f"缺少引擎入口: {script}")
+        self.user_scripts_dir.mkdir(parents=True, exist_ok=True)
         creationflags = 0
         if hasattr(subprocess, "CREATE_NO_WINDOW"):  # keep a console window from popping up
             creationflags = subprocess.CREATE_NO_WINDOW

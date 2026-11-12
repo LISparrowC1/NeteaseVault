@@ -19,7 +19,7 @@ KEEP = ("MUSIC_U", "__csrf", "MUSIC_A", "NMTID", "__remember_me")
 
 def normalize_cookie(text: str) -> str:
     """Accept a raw header, a DevTools copy, JSON, or a bare pair list."""
-    pairs = COOKIE_PAIR.findall(text or "") or JSON_PAIR.findall(text or "") or JSON_PAIR.findall(text or "")
+    pairs = COOKIE_PAIR.findall(text or "") or JSON_PAIR.findall(text or "")
     if not pairs:
         return ""
     picked: dict[str, str] = {}

@@ -65,7 +65,7 @@ class SettingsDialog(QDialog):
     def _library(self):
         from ..config import app_root
 
-        value = self.library_edit.text().strip() or "library"
+        value = self.library_edit.text().strip() or "music"
         path = Path(value)
         return path if path.is_absolute() else app_root() / path
 
@@ -148,10 +148,23 @@ class SettingsDialog(QDialog):
         self.min_bitrate = QSpinBox()
         self.min_bitrate.setRange(100, 2000)
         self.min_bitrate.setValue(int(self.config["quality"]["min_lossless_bitrate"]))
+        self.manual_bitrate = QSpinBox()
+        self.manual_bitrate.setRange(100, 2000)
+        self.manual_bitrate.setValue(int(self.config["quality"]["manual_lossless_bitrate"]))
+        self.download_interval = QDoubleSpinBox()
+        self.download_interval.setRange(0.1, 10.0)
+        self.download_interval.setSingleStep(0.1)
+        self.download_interval.setValue(float(self.config["rate"]["download_interval_s"]))
+        self.download_window = QSpinBox()
+        self.download_window.setRange(1, 600)
+        self.download_window.setValue(int(self.config["rate"]["download_window_per_min"]))
         form.addRow("搜索最小间隔（秒）", self.interval)
         form.addRow("搜索窗口（次/分钟）", self.window)
+        form.addRow("下载最小间隔（秒）", self.download_interval)
+        form.addRow("下载窗口（次/分钟）", self.download_window)
         form.addRow("人工授权后最高音质", self.floor)
-        form.addRow("无损最低平均码率（kbps）", self.min_bitrate)
+        form.addRow("无损判假码率下限（kbps）", self.min_bitrate)
+        form.addRow("无损灰区上限（kbps）", self.manual_bitrate)
         return page
 
     def _cache_tab(self) -> QWidget:
@@ -218,15 +231,18 @@ class SettingsDialog(QDialog):
         if not order:
             QMessageBox.warning(self, "顺序不能为空", "至少保留一个下载通道。")
             return
-        self.config["paths"]["library"] = self.library_edit.text().strip() or "library"
-        self.config["paths"]["staging"] = self.staging_edit.text().strip() or "staging"
+        self.config["paths"]["library"] = self.library_edit.text().strip() or "music"
+        self.config["paths"]["staging"] = self.staging_edit.text().strip() or "data/staging"
         self.config["paths"]["usb_target"] = self.usb_edit.text().strip()
         self.config["download"]["order"] = order
         self.config["download"]["concurrency"] = self.concurrency.value()
         self.config["download"]["retries"] = self.retries.value()
         self.config["rate"]["search_interval_s"] = self.interval.value()
         self.config["rate"]["search_window_per_min"] = self.window.value()
+        self.config["rate"]["download_interval_s"] = self.download_interval.value()
+        self.config["rate"]["download_window_per_min"] = self.download_window.value()
         self.config["quality"]["floor_after_approval"] = self.floor.text().strip() or "320k"
         self.config["quality"]["min_lossless_bitrate"] = self.min_bitrate.value()
+        self.config["quality"]["manual_lossless_bitrate"] = self.manual_bitrate.value()
         save_config(self.config)
         self.accept()

@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QThread, QUrl, Signal
@@ -94,7 +95,8 @@ class DownloadWorker(QThread):
         self._pause = threading.Event()
         self._pause.set()
         self._stop = threading.Event()
-        self.cancelled = False
+        self._done = 0
+        self._done_lock = threading.Lock()
 
     def pause(self) -> None:
         self._pause.clear()
@@ -103,60 +105,96 @@ class DownloadWorker(QThread):
         self._pause.set()
 
     def stop(self) -> None:
-        self.cancelled = True
         self._stop.set()
         self._pause.set()
 
-    def run(self) -> None:
+    def _wait_ready(self) -> bool:
+        while not self._pause.is_set() and not self._stop.is_set():
+            time.sleep(0.1)
+        return not self._stop.is_set()
+
+    def _channels(self):
         from ..core.channels.musicdl_channel import MusicdlChannel
         from ..core.channels.official_channel import OfficialChannel
         from ..core.channels.source_channel import SourceChannel
-        from ..core.download import process_track
         from ..core.engine_client import EngineClient
 
-        store = None
-        try:
-            client = NeteaseClient(self._cookie, min_interval=1.5)
-            mapping = {
-                "musicdl": lambda: MusicdlChannel(self._cookie),
-                "source": lambda: SourceChannel(EngineClient(engine_dir())),
-                "official": lambda: OfficialChannel(client),
-            }
-            order = self._config["download"]["order"]
-            channels = [mapping[name]() for name in order if name in mapping]
-            store = Store(self._db_path)
-            library = path_setting(self._config, "library")
-            staging = path_setting(self._config, "staging")
+        client = NeteaseClient(self._cookie, min_interval=0.0)
+        engine = EngineClient(engine_dir())
+        mapping = {
+            "musicdl": lambda: MusicdlChannel(self._cookie),
+            "source": lambda: SourceChannel(engine),
+            "official": lambda: OfficialChannel(client),
+        }
+        order = self._config["download"]["order"]
+        channels = [mapping[name]() for name in order if name in mapping]
+        return channels, client, engine
 
-            total = len(self._ids)
-            for index, song_id in enumerate(self._ids):
-                if self._stop.is_set():
-                    break
-                while not self._pause.is_set() and not self._stop.is_set():
-                    time.sleep(0.1)
-                if self._stop.is_set():
-                    break
-                row = store.get_track(song_id)
-                if row is None:
-                    self.progress.emit(index + 1, total)
-                    continue
-                self.track_started.emit(song_id, row["title"] or "")
-                try:
-                    result = process_track(
-                        row, channels, store, library=library, staging=staging,
-                        lyric_fetcher=client.lyric_text,
-                        pause_event=self._pause, cancel_event=self._stop,
-                        on_progress=lambda fraction, sid=song_id:
-                            self.track_progress.emit(sid, fraction))
-                    self.track_finished.emit(song_id, result.status, result.message)
-                except Exception as exc:
-                    self.track_finished.emit(song_id, "failed", str(exc))
-                self.progress.emit(index + 1, total)
+    def _run_one(self, song_id: int, search_limiter, download_limiter):
+        from ..core.download import process_track
+
+        if not self._wait_ready():
+            return song_id, "cancelled", "已取消", None
+        store = None
+        engine = None
+        try:
+            store = Store(self._db_path)
+            row = store.get_track(song_id)
+            if row is None:
+                return song_id, "cancelled", "歌单记录已不存在", None
+            self.track_started.emit(song_id, row["title"] or "")
+            channels, client, engine = self._channels()
+            result = process_track(
+                row, channels, store,
+                library=path_setting(self._config, "library"),
+                staging=path_setting(self._config, "staging"),
+                lyric_fetcher=client.lyric_text,
+                pause_event=self._pause, cancel_event=self._stop,
+                on_progress=lambda fraction, sid=song_id:
+                    self.track_progress.emit(sid, fraction),
+                min_bitrate=float(self._config["quality"].get("min_lossless_bitrate", 400)),
+                manual_bitrate=float(self._config["quality"].get("manual_lossless_bitrate", 600)),
+                retries=int(self._config["download"].get("retries", 2)),
+                search_limiter=search_limiter,
+                download_limiter=download_limiter,
+            )
+            return song_id, result.status, result.message, result
         except Exception as exc:
-            self.failed.emit(str(exc))
+            return song_id, "failed", str(exc), None
         finally:
+            if engine is not None:
+                engine.close()
             if store is not None:
                 store.close()
+
+    def run(self) -> None:
+        from ..core.ratelimit import RateLimiter
+
+        try:
+            concurrency = max(1, min(8, int(self._config["download"].get("concurrency", 1))))
+            rate = self._config.get("rate", {})
+            search_limiter = RateLimiter(
+                float(rate.get("search_interval_s", 0)),
+                int(rate.get("search_window_per_min", 0)))
+            download_limiter = RateLimiter(
+                float(rate.get("download_interval_s", 0)),
+                int(rate.get("download_window_per_min", 0)))
+            total = len(self._ids)
+            with ThreadPoolExecutor(max_workers=concurrency) as pool:
+                futures = [pool.submit(self._run_one, sid, search_limiter, download_limiter)
+                           for sid in self._ids]
+                for future in as_completed(futures):
+                    song_id, status, message, _ = future.result()
+                    self.track_finished.emit(song_id, status, message)
+                    with self._done_lock:
+                        self._done += 1
+                        done = self._done
+                    self.progress.emit(done, total)
+                    if self._stop.is_set():
+                        # Running tasks observe the event; queued tasks exit quickly.
+                        pass
+        except Exception as exc:
+            self.failed.emit(str(exc))
 
 
 # -- window ---------------------------------------------------------------
@@ -505,6 +543,7 @@ class MainWindow(QMainWindow):
         if answer != QMessageBox.Yes:
             return
         removed = self.store.clear_sync_data()
+        self.store.clear_sync_history()
         self.reload_tracks()
         QMessageBox.information(
             self, "已清除",
@@ -772,7 +811,7 @@ class MainWindow(QMainWindow):
         if self.pause_btn.text() == "暂停":
             worker.pause()
             self.pause_btn.setText("继续")
-            self.status_label.setText("已暂停，当前正在下载的文件会继续传完")
+            self.status_label.setText("已暂停；继续后从当前分块接着下载")
         else:
             worker.resume()
             self.pause_btn.setText("暂停")
@@ -786,7 +825,9 @@ class MainWindow(QMainWindow):
         elif status == "review":
             self._run_review += 1
         self.reload_tracks()
-        self.status_label.setText(f"{'已下载' if status == 'downloaded' else '转人工'}：{message}")
+        label = {"downloaded": "已下载", "review": "转人工",
+                 "failed": "匹配失败", "cancelled": "已取消"}.get(status, status)
+        self.status_label.setText(f"{label}：{message}")
 
     def _on_progress(self, done: int, total: int) -> None:
         self.progress.setMaximum(total)
@@ -823,11 +864,6 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             self.config = load_config()
             self.reload_tracks()
-
-    def open_sources(self) -> None:
-        from .source_manager import SourceManagerDialog
-
-        SourceManagerDialog(self.store, self).exec()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         if self._download_worker is not None and self._download_worker.isRunning():

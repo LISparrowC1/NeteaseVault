@@ -24,24 +24,16 @@ DEFAULTS: dict[str, Any] = {
         "retries": 2,
     },
     "quality": {
-        "prefer_lossless": True,
         "floor_after_approval": "320k",
-        # A FLAC that averages below this is treated as suspicious.
-        "min_lossless_bitrate": 500,
-        # High-band cliff thresholds, see docs/方案.md 8.4.
-        "spectrum_pass_db": -30.0,
-        "spectrum_manual_db": -40.0,
+        # Below this the file cannot be lossless; 400..600 is the manual grey zone.
+        "min_lossless_bitrate": 400,
+        "manual_lossless_bitrate": 600,
     },
     "rate": {
         "search_interval_s": 1.5,
         "search_window_per_min": 20,
-    },
-    "fields": {
-        "keep": ["TITLE", "ARTIST", "ALBUM", "LYRICS"],
-    },
-    "appearance": {
-        "theme": "dark",
-        "accent": "#2E7BE7",
+        "download_interval_s": 0.5,
+        "download_window_per_min": 60,
     },
 }
 
@@ -56,9 +48,8 @@ def app_root() -> Path:
 def bundle_root() -> Path:
     """Read-only resources shipped with the program.
 
-    In a frozen one-file build everything is unpacked to a temp directory, so bundled
-    data (engine, runtime, schema.sql) must be looked up there instead of next to the
-    executable.
+    Bundled data (engine, runtime, schema.sql) lives in the onedir ``_internal``
+    folder, never next to the writable data directories.
     """
     if getattr(sys, "frozen", False):
         return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
@@ -69,9 +60,19 @@ def engine_dir() -> Path:
     return bundle_root() / "engine"
 
 
+def user_scripts_dir() -> Path:
+    """Imported source scripts are runtime data, not bundled resources."""
+    return data_dir() / "engine" / "scripts"
+
+
 def data_dir() -> Path:
     """Everything the program writes at runtime, except the music library."""
     return app_root() / "data"
+
+
+def temp_dir() -> Path:
+    """Third-party temp files also stay inside the program folder."""
+    return data_dir() / "tmp"
 
 
 def logs_dir() -> Path:
@@ -86,6 +87,7 @@ def ensure_layout() -> None:
     """
     (app_root() / "music").mkdir(parents=True, exist_ok=True)
     data_dir().mkdir(parents=True, exist_ok=True)
+    temp_dir().mkdir(parents=True, exist_ok=True)
     if not config_path().exists():
         save_config(json.loads(json.dumps(DEFAULTS)))
 

@@ -130,6 +130,15 @@ class ApprovalDialog(QDialog):
         if candidate is None or not candidate.url:
             QMessageBox.information(self, "没有候选", "请选择一行。")
             return
+        floor = str(self.config["quality"].get("floor_after_approval", "320k")).lower()
+        ranks = {"hires": 4, "lossless": 3, "flac": 3, "320k": 2, "192k": 1, "128k": 0}
+        floor_rank = ranks.get(floor, 2)
+        if ranks.get((candidate.quality or "").lower(), -1) < floor_rank:
+            QMessageBox.warning(
+                self, "低于授权下限",
+                f"当前候选是 {candidate.quality or '未知音质'}，低于设置里的"
+                f"「{floor}」。请改选更高音质，或先在设置里调整下限。")
+            return
         self._player.stop()
         path, message = download_chosen(
             self.track, candidate, self.store,
@@ -137,6 +146,8 @@ class ApprovalDialog(QDialog):
             staging=path_setting(self.config, "staging"),
             lyric_fetcher=None,
             expected_lossless=False,
+            min_bitrate=float(self.config["quality"].get("min_lossless_bitrate", 400)),
+            manual_bitrate=float(self.config["quality"].get("manual_lossless_bitrate", 600)),
         )
         if path is None:
             QMessageBox.warning(self, "入库失败", message)

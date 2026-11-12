@@ -30,6 +30,7 @@ class Store:
         self._conn = sqlite3.connect(self.db_path)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.execute("PRAGMA foreign_keys=ON")
         if not SCHEMA.exists():
             raise FileNotFoundError(f"缺少数据库结构文件: {SCHEMA}")
@@ -144,7 +145,7 @@ class Store:
         rows = self._conn.execute("SELECT * FROM track").fetchall()
         return {int(row["song_id"]): row for row in rows}
 
-    def upsert_track(self, record: dict[str, Any], *, new_state: str | None = None) -> bool:
+    def upsert_track(self, record: dict[str, Any]) -> bool:
         """Insert or refresh cloud-side data. Never touches ``local_state``."""
         existing = self._conn.execute(
             "SELECT song_id FROM track WHERE song_id=?", (record["song_id"],)).fetchone()
@@ -201,9 +202,6 @@ class Store:
 
     def get_track(self, song_id: int) -> sqlite3.Row | None:
         return self._conn.execute("SELECT * FROM track WHERE song_id=?", (song_id,)).fetchone()
-
-    def counts(self) -> dict[str, int]:
-        return {key: len(self.list_tracks(key)) for key in states.LISTS}
 
     # -- local state ------------------------------------------------------
 
@@ -266,14 +264,6 @@ class Store:
                                  [(i,) for i in ids])
             return len(ids)
         return self.delete_tracks(ids)
-
-    def clear_all(self) -> int:
-        ids = [int(row["song_id"]) for row in self.all_tracks()]
-        with self.tx() as conn:
-            conn.execute("DELETE FROM track")
-            conn.execute("DELETE FROM approval")
-            conn.execute("DELETE FROM playlist")
-        return len(ids)
 
     def clear_sync_data(self) -> int:
         """Forget only what the cloud told us.

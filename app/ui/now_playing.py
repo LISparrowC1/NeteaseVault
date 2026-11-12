@@ -12,10 +12,11 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPixmap
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-                               QPushButton, QVBoxLayout, QWidget)
+                               QPushButton, QStackedWidget, QVBoxLayout, QWidget)
 
 from ..core import covers
 from . import theme
+from .spectrum_view import SegmentedControl, SpectrumView
 
 
 def read_lyrics(path: Path) -> str:
@@ -76,6 +77,7 @@ class NowPlayingPage(QWidget):
         self._stamps: list[int | None] = []
         self._current = -1
         self._cover_url = ""
+        self._path: Path | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(36, 20, 36, 20)
@@ -108,6 +110,9 @@ class NowPlayingPage(QWidget):
         self.meta.setObjectName("PlaylistMeta")
         self.meta.setWordWrap(True)
         left.addWidget(self.meta)
+        self.mode = SegmentedControl()
+        self.mode.changed.connect(self._set_mode)
+        left.addWidget(self.mode, 0, Qt.AlignLeft)
         left.addStretch(1)
         body.addLayout(left)
 
@@ -116,7 +121,11 @@ class NowPlayingPage(QWidget):
         self.lyrics.setFocusPolicy(Qt.NoFocus)
         self.lyrics.setSelectionMode(QListWidget.NoSelection)
         self.lyrics.setVerticalScrollMode(QListWidget.ScrollPerPixel)
-        body.addWidget(self.lyrics, 1)
+        self.spectrum = SpectrumView()
+        self.content = QStackedWidget()
+        self.content.addWidget(self.lyrics)
+        self.content.addWidget(self.spectrum)
+        body.addWidget(self.content, 1)
         root.addLayout(body, 1)
 
         self.timer = QTimer(self)
@@ -128,6 +137,10 @@ class NowPlayingPage(QWidget):
 
     def show_track(self, path: Path, title: str, artist: str, album: str,
                    player, cover_url: str | None = None) -> None:
+        self._path = path
+        self.mode.set_index(0)
+        self.content.setCurrentIndex(0)
+        self.spectrum.clear()
         self.title.setText(title or path.stem)
         self.meta.setText("\n".join(part for part in (artist, album) if part))
         self._player = player
@@ -158,6 +171,16 @@ class NowPlayingPage(QWidget):
 
     def stop(self) -> None:
         self.timer.stop()
+        self.spectrum.shutdown()
+        self.mode.set_index(0)
+        self.content.setCurrentIndex(0)
+
+    def _set_mode(self, index: int) -> None:
+        self.content.setCurrentIndex(1 if index else 0)
+        if index and self._path is not None:
+            self.spectrum.show_path(self._path)
+        else:
+            self.spectrum.clear()
 
     # -- cover ------------------------------------------------------------
 

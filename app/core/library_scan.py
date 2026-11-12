@@ -19,6 +19,19 @@ from .normalize import normalize
 AUDIO_SUFFIXES = {".flac", ".mp3", ".m4a", ".wav", ".ape", ".ogg", ".dsf", ".aiff"}
 
 
+def quality_label(info) -> str | None:
+    if info is None:
+        return None
+    if info.is_lossless_container:
+        if info.samplerate > 48000 or (info.bits or 0) > 16:
+            return "hires"
+        return "lossless"
+    if info.bitrate_kbps:
+        return f"{int(round(info.bitrate_kbps / 32.0) * 32)}k"
+    return None
+
+
+
 def split_stem(stem: str) -> tuple[str, str]:
     if " - " in stem:
         title, artist = stem.rsplit(" - ", 1)
@@ -50,25 +63,29 @@ def reconcile_local(store, library: Path) -> dict[str, int]:
         title, artist = split_stem(path.stem)
         key = (normalize(title), normalize(artist))
         cloud = cloud_index.get(key)
+        try:
+            info = probe(path)
+        except Exception:
+            info = None
 
         if cloud is not None and int(cloud["song_id"]) not in adopted_ids:
             adopted_ids.add(int(cloud["song_id"]))
             if cloud["local_rel_path"] != rel or cloud["local_state"] != "downloaded":
                 store.attach_local(int(cloud["song_id"]), rel_path=rel,
-                                   fmt=path.suffix.lstrip("."), quality="lossless")
+                                   fmt=info.fmt if info else path.suffix.lstrip("."),
+                                   quality=quality_label(info),
+                                   duration_ms=info.duration_ms if info else None)
             stats["linked"] += 1
             continue
 
         # No cloud counterpart: keep one local-only row per file.
         existing = store.find_by_rel_path(rel)
         if existing is None:
-            duration = None
-            try:
-                duration = probe(path).duration_ms
-            except Exception:
-                pass
-            store.register_local_file(rel_path=rel, title=title, artist=artist, album="",
-                                      duration_ms=duration, fmt=path.suffix.lstrip("."))
+            store.register_local_file(
+                rel_path=rel, title=title, artist=artist, album="",
+                duration_ms=info.duration_ms if info else None,
+                quality=quality_label(info),
+                fmt=info.fmt if info else path.suffix.lstrip("."))
             stats["orphan"] += 1
         elif not existing["cloud_present"]:
             stats["orphan"] += 1

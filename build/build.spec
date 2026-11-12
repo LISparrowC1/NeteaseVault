@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller build: one exe, with the Node engine and its scripts bundled."""
+"""PyInstaller build: one program folder, with the Node engine bundled."""
 
 from pathlib import Path
 
@@ -24,7 +24,7 @@ hiddenimports = (
     ["zhconv", "certifi"]
     + collect_submodules("musicdl.modules")
     + collect_submodules("soundfile")
-    + ["PySide6.QtMultimedia", "PySide6.QtNetwork", "PySide6.QtWidgets", "PySide6.QtSvg", "segno"]
+    + ["PySide6.QtMultimedia", "PySide6.QtNetwork", "PySide6.QtWidgets", "PySide6.QtSvg"]
 )
 
 a = Analysis(
@@ -42,9 +42,8 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="NeteaseVault",
     icon=str(ROOT / "icon.ico"),
     version=str(ROOT / "version_info.txt"),
@@ -52,10 +51,17 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
-    onefile=True,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    name="NeteaseVault",
 )
 
 if __name__ == "__main__":

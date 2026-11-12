@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-from .config import app_root, ensure_layout
+from .config import app_root, ensure_layout, temp_dir
 from .ui import theme
 from .ui.main_window import MainWindow
 
@@ -40,11 +40,10 @@ def _setup_logging() -> None:
 
 
 def _prepare_ca_bundle() -> Path | None:
-    """Keep a CA copy outside the onefile temp dir.
+    """Keep a writable CA copy inside ``data/``.
 
-    PyInstaller unpacks certifi into ``_MEIPASS``; if that folder is cleaned while the
-    app is open, requests can no longer load the bundle at request time. Copying it to
-    ``data/`` and pointing requests there makes login independent of the temp dir.
+    certifi ships in ``_internal``; pointing requests at a persistent copy means a
+    moved installation and any future runtime-folder cleanup cannot break HTTPS.
     """
     try:
         import certifi
@@ -73,6 +72,11 @@ def _selftest() -> int:
     """
     status, detail = "ok", ""
     try:
+        # Keep even the selftest's temporary database inside the program folder.
+        scratch = app_root() / "data" / "tmp"
+        scratch.mkdir(parents=True, exist_ok=True)
+        os.environ["TMP"] = os.environ["TEMP"] = os.environ["TMPDIR"] = str(scratch)
+        tempfile.tempdir = str(scratch)
         from .core import clean, download, match, sync  # noqa: F401
         from .core.channels import musicdl_channel, official_channel, source_channel  # noqa: F401
         from .db.store import Store
@@ -104,6 +108,9 @@ def main() -> int:
         return _selftest()
 
     ensure_layout()
+    tmp = temp_dir()
+    os.environ["TMP"] = os.environ["TEMP"] = os.environ["TMPDIR"] = str(tmp)
+    tempfile.tempdir = str(tmp)
     _prepare_ca_bundle()
     _setup_logging()
 
@@ -111,7 +118,15 @@ def main() -> int:
     app.setApplicationName("NeteaseVault")
     app.setStyleSheet(theme.STYLESHEET)
     window = MainWindow()
-    window.showMaximized()
+    screen = window.screen() or app.primaryScreen()
+    available = screen.availableGeometry() if screen is not None else None
+    if available is not None and available.isValid():
+        # showMaximized can exceed the screen at 150% DPI and push the player bar
+        # below the desktop; leave room for the window frame and show normally.
+        window.setGeometry(available.adjusted(0, 0, -16, -16))
+        window.show()
+    else:
+        window.showMaximized()
     return app.exec()
 
 

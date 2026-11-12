@@ -85,6 +85,13 @@ def _downloaded(p: QPainter) -> None:
     p.drawLine(QPointF(18, 24), QPointF(26, 15))
 
 
+def _spectrum(p: QPainter) -> None:
+    bars = (10, 17, 24, 14, 29, 20, 12, 23)
+    for index, height in enumerate(bars):
+        x = 8 + index * 3.2
+        p.drawLine(QPointF(x, 30), QPointF(x, 30 - height))
+
+
 _BUILDERS = {
     "playlist": _playlist,
     "heart_broken": _heart_broken,
@@ -93,6 +100,7 @@ _BUILDERS = {
     "review": _review,
     "failed": _failed,
     "downloaded": _downloaded,
+    "spectrum": _spectrum,
 }
 
 
