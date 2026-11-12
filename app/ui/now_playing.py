@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPixmap
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                                QPushButton, QStackedWidget, QVBoxLayout, QWidget)
@@ -122,16 +122,13 @@ class NowPlayingPage(QWidget):
         self.lyrics.setSelectionMode(QListWidget.NoSelection)
         self.lyrics.setVerticalScrollMode(QListWidget.ScrollPerPixel)
         self.spectrum = SpectrumView()
-        self.live = LiveSpectrum()
-        self.spectrum_page = QWidget()
-        spectrum_layout = QVBoxLayout(self.spectrum_page)
-        spectrum_layout.setContentsMargins(0, 0, 0, 0)
-        spectrum_layout.setSpacing(6)
-        spectrum_layout.addWidget(self.spectrum, 1)
-        spectrum_layout.addWidget(self.live)
+        self.live = LiveSpectrum(self.spectrum)
+        self.live.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.live.hide()
+        self.spectrum.installEventFilter(self)
         self.content = QStackedWidget()
         self.content.addWidget(self.lyrics)
-        self.content.addWidget(self.spectrum_page)
+        self.content.addWidget(self.spectrum)
         body.addWidget(self.content, 1)
         root.addLayout(body, 1)
 
@@ -150,6 +147,7 @@ class NowPlayingPage(QWidget):
         self.spectrum.clear()
         self.live.set_track(path, player)
         self.live.set_active(False)
+        self.live.hide()
         self.title.setText(title or path.stem)
         self.meta.setText("\n".join(part for part in (artist, album) if part))
         self._player = player
@@ -190,24 +188,47 @@ class NowPlayingPage(QWidget):
     def stop(self) -> None:
         self.timer.stop()
         self.live.stop()
+        self.live.hide()
         self.spectrum.shutdown()
         self.mode.set_index(0)
         self.content.setCurrentIndex(0)
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
+        self._position_live()
         self.resume_live()
 
     def hideEvent(self, event) -> None:  # noqa: N802
         self.live.set_active(False)
         super().hideEvent(event)
 
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        if obj is self.spectrum and event.type() == QEvent.Resize:
+            self._position_live()
+        return super().eventFilter(obj, event)
+
+    def _position_live(self) -> None:
+        left, right, bottom = 46, 20, 24
+        width = max(0, self.spectrum.width() - left - right)
+        y = max(0, self.spectrum.height() - bottom - 55)
+        self.live.setGeometry(left, y, width, 55)
+        self.live.raise_()
+
     def resume_live(self) -> None:
-        self.live.set_active(
-            self.mode.current() == 1 and self.isVisible() and self._path is not None)
+        spectrum_mode = self.mode.current() == 1
+        self.live.setVisible(spectrum_mode and self.isVisible())
+        if spectrum_mode and self.isVisible() and self._path is not None:
+            self._position_live()
+            self.live.set_active(True)
+        else:
+            self.live.set_active(False)
 
     def _set_mode(self, index: int) -> None:
         self.content.setCurrentIndex(1 if index else 0)
+        self.live.setVisible(bool(index) and self.isVisible())
+        if index:
+            self._position_live()
+            self.live.raise_()
         self.live.set_active(
             bool(index) and self.isVisible() and self._path is not None)
         if index and self._path is not None:

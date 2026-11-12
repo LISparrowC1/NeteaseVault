@@ -9,7 +9,7 @@ import shutil
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QStandardPaths, Qt
 from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
                                QPushButton, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
@@ -75,6 +75,7 @@ class SourceManagerDialog(QDialog):
         layout.addLayout(row)
 
         self.finished.connect(self._cleanup)
+        self._drop_internal_shim()
         self.reload()
 
     # -- loading ----------------------------------------------------------
@@ -127,9 +128,47 @@ class SourceManagerDialog(QDialog):
 
     # -- actions ----------------------------------------------------------
 
+    def _drop_internal_shim(self) -> None:
+        """Remove a copy of the bundled host shim mistaken for a source script."""
+        bundled = engine_dir() / "host" / "lx-shim.js"
+        candidate = self.scripts_dir / "lx-shim.js"
+        try:
+            if (candidate.exists() and bundled.exists()
+                    and candidate.read_bytes() == bundled.read_bytes()):
+                candidate.unlink()
+        except OSError:
+            pass
+
+    @staticmethod
+    def _looks_like_source(path: Path, text: str) -> bool:
+        if path.name.lower() == "lx-shim.js":
+            return False
+        if "@name" not in text:
+            return False
+        return "lx.send" in text and "sources" in text
+
     def _import(self) -> None:
-        files, _ = QFileDialog.getOpenFileNames(self, "选择源脚本", "", "JavaScript (*.js)")
+        start = (QStandardPaths.writableLocation(QStandardPaths.DownloadLocation)
+                 or str(Path.home()))
+        files, _ = QFileDialog.getOpenFileNames(self, "选择源脚本", start,
+                                                "JavaScript (*.js)")
         if not files:
+            return
+        invalid = []
+        for path in files:
+            try:
+                text = Path(path).read_text(encoding="utf-8-sig", errors="ignore")
+            except OSError:
+                invalid.append(Path(path).name)
+                continue
+            if not self._looks_like_source(Path(path), text):
+                invalid.append(Path(path).name)
+        if invalid:
+            QMessageBox.warning(
+                self, "不是音源脚本",
+                "以下文件不是 LX 音源脚本，已停止导入：\n"
+                + "\n".join(invalid)
+                + "\n\n请选择带有 @name 和 lx.send('inited', ...) 的源脚本。")
             return
         target = self.scripts_dir
         target.mkdir(parents=True, exist_ok=True)
@@ -145,14 +184,10 @@ class SourceManagerDialog(QDialog):
         if sample is None and rows:
             sample = rows[0]
         if sample is None:
-            sample = {
-                "song_id": 347230,
-                "title": "海阔天空",
-                "artist": "Beyond",
-                "album": "乐与怒",
-                "duration_ms": 326000,
-                "cloud_playable": 1,
-            }
+            QMessageBox.warning(
+                self, "没有样本",
+                "健康检查需要一首真实曲目。请先同步「我喜欢的音乐」，再回来检查。")
+            return
         info = music_info(sample)
         targets = [row for row in self.rows
                    if not row.get("error") and "wy" in (row.get("sources") or {})]

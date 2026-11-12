@@ -1,9 +1,8 @@
-"""Mirrored live spectrum for the now-playing page.
+"""Live spectrum for the spectrum page.
 
-The visualiser reads a short PCM window around the player position and draws the
-half-spectrum once to the left and once to the right of the centre line.  Bars are
-contiguous, so the result reads as a compact mirrored analyser rather than a
-full-width equaliser.
+The visualiser reads a short PCM window and mirrors each band above and below a
+horizontal centre line.  Bars are contiguous, so the result reads as a compact
+top/bottom mirrored analyser.
 """
 from __future__ import annotations
 
@@ -17,14 +16,14 @@ from ..core.spectrum import live_levels
 
 
 class LiveSpectrum(QWidget):
-    HALF_BANDS = 32
+    BANDS = 64
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._player = None
         self._path: Path | None = None
         self._active = False
-        self._levels = [0.0] * self.HALF_BANDS
+        self._levels = [0.0] * self.BANDS
         self.setFixedHeight(55)
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -37,7 +36,7 @@ class LiveSpectrum(QWidget):
     def set_track(self, path: Path, player) -> None:
         self._path = path
         self._player = player
-        self._levels = [0.0] * self.HALF_BANDS
+        self._levels = [0.0] * self.BANDS
         self.set_active(True)
         self.update()
 
@@ -54,7 +53,7 @@ class LiveSpectrum(QWidget):
         self.set_active(False)
         self._path = None
         self._player = None
-        self._levels = [0.0] * self.HALF_BANDS
+        self._levels = [0.0] * self.BANDS
         self.update()
 
     def _tick(self) -> None:
@@ -62,7 +61,7 @@ class LiveSpectrum(QWidget):
             return
         if not self.isVisible():
             return
-        levels = live_levels(self._path, self._player.position(), bands=self.HALF_BANDS)
+        levels = live_levels(self._path, self._player.position(), bands=self.BANDS)
         if levels is not None:
             self._levels = [float(v) for v in levels]
         self.update()
@@ -75,22 +74,20 @@ class LiveSpectrum(QWidget):
             return
         width = self.width()
         height = self.height()
-        center = width / 2.0
-        slot = center / self.HALF_BANDS
+        center = height / 2.0
+        slot = width / self.BANDS
         bar_width = slot + 0.6
         for index, level in enumerate(self._levels):
-            bar_height = max(1.5, (height - 8) * max(0.02, level))
-            top = height - 3 - bar_height
+            bar_height = max(1.0, (center - 3) * max(0.02, level))
+            x = index * slot
             color = QColor(
-                int(24 + 96 * level),
-                int(38 + 28 * level),
-                int(120 + 72 * level),
+                int(10 + 80 * level),
+                int(20 + 30 * level),
+                int(80 + 60 * level),
                 128,
             )
             painter.setPen(Qt.NoPen)
             painter.setBrush(color)
-            painter.drawRect(QRectF(center - (index + 1) * slot, top,
-                                    bar_width, bar_height))
-            painter.drawRect(QRectF(center + index * slot, top,
-                                    bar_width, bar_height))
+            painter.drawRect(QRectF(x, center - bar_height, bar_width, bar_height))
+            painter.drawRect(QRectF(x, center, bar_width, bar_height))
         painter.end()
