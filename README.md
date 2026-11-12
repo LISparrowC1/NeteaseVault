@@ -1,94 +1,230 @@
 # NeteaseVault
 
+**简体中文** | [English](README.en.md)
+
+[![Release](https://img.shields.io/github/v/release/LISparrowC1/NeteaseVault?style=for-the-badge)](https://github.com/LISparrowC1/NeteaseVault/releases)
+[![License](https://img.shields.io/badge/License-MIT-3b7a6e?style=for-the-badge)](LICENSE)
+[![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D4?style=for-the-badge&logo=windows)](https://github.com/LISparrowC1/NeteaseVault/releases)
+
 当前版本：**1.2.9**
 
 网易云音乐「我喜欢的音乐」归档工具：同步歌单 → 多源下载 → 严格校验 → 本地长期保存。
 
-## 功能
-
-- 同步「我喜欢的音乐」全部曲目，记录顺序、时长、云端音质与可播状态
-- 多引擎下载：musicdl、自定义源脚本、官方接口，按设置里的顺序执行；自定义源可从公开活跃仓库自动拉取并用真实歌曲实测
-- 自定义源可手动上移/下移，也可按健康检查结果自动排序
-- 健康检查取云端歌单第一首未下载歌曲，不依赖本地曲库或内置样本
-- 音源仓库列表保存在 `data/source_repos.json`，可自行增删
-- 设置缓存页可分别清理封面、暂存、临时文件、musicdl 输出和自动获取的音源
-- 严格匹配：同一 `song_id` 的官方/自定义源候选直接视为同一首；搜索候选要求歌名/歌手/专辑归一化后完全相等、时长整秒相等且候选唯一，否则转人工
-- 假无损检测：入库前解码 PCM，按频谱截止、码率与高频断崖判断，灰区转人工
-- 暂存区校验后原子入库，文件名固定为 `歌名 - 歌手.ext`，标签只保留四项
-- 七个视图：网易歌单、已取消喜欢、失效、等待下载、待确认、匹配失败、已下载
-- 内置播放器；播放页可切换歌词/整首频谱，频谱页左栏选项下方显示上下镜像实时频谱
-- Cookie 登录，凭证用 Windows DPAPI 加密
-- 绿色安装包：安装后整个目录可移动，删除目录即卸载，不写注册表/AppData
-
-## 构建
-
-```powershell
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-pwsh -NoProfile -File build\build.ps1
-```
-
-构建从源码生成 onedir 程序，再编译绿色安装器；最终安装包写入上一级 `release\`。
-自定义源需要 `runtime\node.exe`。
-
-## 安装与运行
-
-双击 `NeteaseVault-<版本号>-Setup.exe`，选择安装目录（默认“当前目录\NeteaseVault”）。
-安装后目录结构：
-
-```
-NeteaseVault.exe
-data/          运行库、引擎、证书、数据库、凭证、日志、缓存、暂存、自定义源脚本
-music/         音乐库
-```
-
-除了 `music/`，运行期写入都在 `data/`；目录可整体搬走。删除整个目录即卸载。
-
-## 登录
-
-扫码登录已被网易关闭（8821），使用 Cookie：登录 music.163.com 后按 F12 →
-Application → Cookies → 复制 `MUSIC_U`，粘贴到登录窗口即可。
-
-## 许可
-
-MIT
+它不是一个在线播放器，重点是把喜欢的歌完整、可校验地收进自己的音乐库：记录云端顺序、确认下载来源、检查文件是否真的是无损、清理标签，最后原子入库。
 
 ---
 
-# NeteaseVault (English)
+## ✨ 功能
 
-Current version: **1.2.9**
+| 功能 | 说明 |
+| --- | --- |
+| 歌单同步 | 同步「我喜欢的音乐」全部曲目，记录顺序、时长、云端音质与可播状态 |
+| 七个视图 | 网易歌单、已取消喜欢、失效、等待下载、待确认、匹配失败、已下载 |
+| 多源下载 | musicdl、自定义源脚本、官方接口；严格按设置里的通道顺序执行 |
+| 严格匹配 | 同 `song_id` 直接视为同一首；搜索候选要求歌名/歌手/专辑归一化相等、时长整秒相等且唯一 |
+| 假无损检测 | 解码 PCM，检查频谱截止、码率和高频断崖；灰区转人工 |
+| 原子入库 | 先写暂存区，校验通过后移动到音乐库，不会留下半成品 |
+| 标签清理 | 固定 `歌名 - 歌手.ext` 文件名，只保留四项标签 |
+| 自定义源 | 手动导入、自动获取、健康检查、手动排序、按测试结果自动排序 |
+| 播放 | 内置播放器，歌词/整首频谱切换，频谱页左下显示实时上下镜像频谱 |
+| 本地优先 | Cookie 用 Windows DPAPI 加密；不写注册表、不写 AppData、不上传听歌数据 |
+| 绿色安装 | 安装后整个目录可移动，删除目录即卸载；缓存可逐项清理 |
 
-Archive tool for NetEase Cloud Music "Liked Songs": sync the playlist, download tracks,
-validate them strictly and keep a local library that stays playable.
+---
 
-## Features
+## 🚀 快速开始
 
-- Syncs the whole playlist with order, duration, quality and playability
-- Multiple download engines (musicdl, custom source scripts, official API) in the
-  configured order; custom sources can be auto-fetched from active public
-  repositories and tested with real songs
-- Custom sources can be reordered manually or sorted by health-check results
-- Health checks use the first not-yet-downloaded song from the cloud playlist;
-  neither the local library nor a built-in sample is used
-- The repository list is editable at `data/source_repos.json`
-- Cache settings can clear covers, staging, temporary files, musicdl output and
-  auto-fetched source scripts independently
-- A single matching `song_id` from the official/custom-source channels is authoritative;
-  search candidates must pass normalized title/artist/album equality, whole-second
-  duration equality, and be unique, otherwise they go to manual review
-- Fake-lossless detection decodes PCM before tagging and checks spectral cutoff,
-  bitrate and high-band cliffs; grey cases go to manual review
-- Staging area, validation, atomic move into the library
-- Fixed naming (`Title - Artist.ext`) and a four-field tag whitelist
-- Seven views: playlist, unliked, unavailable, waiting, review, failed, downloaded
-- Built-in player with lyrics and a full-track spectrum view; the spectrum page shows
-  a compact up/down mirrored live spectrum below the left-side switch
-- Cookie login, credentials encrypted with Windows DPAPI
-- Green installer: the installed folder is movable and deleting it uninstalls the app;
-  no registry or AppData writes
+### 1. 下载安装
 
-## Build
+到 [Releases](https://github.com/LISparrowC1/NeteaseVault/releases) 下载最新的：
+
+```text
+NeteaseVault-<版本号>-Setup.exe
+```
+
+双击安装，默认装到「当前目录\NeteaseVault」。安装器会创建：
+
+```text
+NeteaseVault.exe
+data/
+music/
+```
+
+安装完成后可以整个目录搬到别处；删除目录就是卸载。
+
+### 2. 登录
+
+网易云已关闭扫码登录（8821），使用 Cookie：
+
+1. 浏览器登录 [music.163.com](https://music.163.com)。
+2. 按 `F12` → `Application`（应用）→ `Cookies`。
+3. 找到域名为 `music.163.com` 的 `MUSIC_U`，复制它的值。
+4. 打开 NeteaseVault → 登录窗口，粘贴 Cookie，保存。
+
+凭证只保存在本机 `data/credentials.bin`，用当前 Windows 用户的 DPAPI 加密，换用户或换机器无法直接解密。
+
+### 3. 同步歌单
+
+登录后点「同步」。程序会：
+
+- 读取账户信息；
+- 找到「我喜欢的音乐」；
+- 拉取歌单顺序和每首歌的详情；
+- 把云端新增/移除/失效状态写进 `data/library.db`。
+
+第一次同步会慢一些；之后的同步只更新变化。同步期间不要强制关闭程序。
+
+### 4. 下载
+
+在「等待下载」里选择歌曲，点「下载选中的 N 首」。
+
+下载顺序由 **设置 → 下载 → 下载通道顺序** 决定，例如：
+
+```text
+musicdl
+自定义源
+官方接口
+```
+
+`自定义源` 在哪个位置，就在哪个位置尝试；不会强制排在 musicdl 或官方接口前面。
+
+下载状态会进入对应视图：
+
+- 成功 → 已下载
+- 匹配不到或校验失败 → 匹配失败
+- 需要人工确认 → 待确认
+- 云端已取消喜欢 → 已取消喜欢
+- 云端不可播 → 失效
+
+### 5. 自定义源
+
+打开「设置 → 自定义源 → 打开自定义源管理…」。
+
+三种用法：
+
+1. **手动导入**：选任意 `.js`，复制到 `data/engine/scripts`；能不能加载由引擎在列表里报告。
+2. **自动获取**：点「自动获取最新音源」，从配置的公开仓库拉取候选，校验格式，再用云端真实歌曲逐个测试，只安装测试成功的源。
+3. **健康检查**：点「全部健康检查」，取「我喜欢的音乐」中第一首**未下载**歌曲来测试；全部已下载时取第一首。
+
+排序：
+
+- 「上移 / 下移」手动排序，立即写入数据库；
+- 「按测试结果排序」按成功优先、延迟升序、失败最后自动重排；
+- 勾选「检查后自动排序」后，健康检查结束会自动重排。
+
+下载时某个源解析或下载失败会自动尝试下一个源；所有自定义源都失败才继续下一个下载通道。
+
+源地址列表在：
+
+```text
+data/source_repos.json
+```
+
+窗口里的「编辑源地址列表」可直接打开。文件包含仓库、分支、路径匹配、每个仓库取几个，以及 API 失败时的直链兜底。
+
+### 6. 播放与频谱
+
+双击已下载歌曲进入播放页：
+
+- 左栏：封面、标题、歌手/专辑、「歌词 / 频谱」切换；
+- 右栏：歌词，或整首静态频谱；
+- 切到「频谱」后，左栏切换按钮下方显示 300×55 的实时频谱；以水平中轴上下镜像、柱子紧贴、深色 50% 透明。
+
+静态频谱使用 Spek 默认的 SoX 色阶（0 到 -120 dB），不缓存、不落盘。
+
+---
+
+## 📁 目录与数据
+
+```text
+NeteaseVault.exe
+data/     运行库、引擎、证书、数据库、凭证、配置、日志、缓存、暂存、自定义源脚本
+music/    音乐库
+```
+
+- `music/`：最终歌曲文件，文件名 `歌名 - 歌手.ext`。
+- `data/library.db`：歌单、本地状态、审核记录、同步记录。
+- `data/credentials.bin`：DPAPI 加密后的 Cookie。
+- `data/engine/scripts/`：手动导入的源脚本。
+- `data/engine/scripts/auto-*.js`：自动获取并通过测试的源脚本，可在缓存页一键清除。
+- `data/source_repos.json`：自动获取的仓库列表，可编辑。
+- `data/cache/covers/`：封面缓存。
+- `data/staging/`：下载暂存区。
+- `data/tmp/`：临时文件，包括自动获取音源时的临时目录。
+
+运行期除 `music/` 外的写入都在 `data/`，不写注册表，不写 `%AppData%`。
+
+---
+
+## 🧠 工作原理
+
+### 同步
+
+云端歌单和本地文件是两条独立的轴：
+
+- 云端：`cloud_present`、`cloud_playable`、顺序、时长、音质；
+- 本地：`local_state`、`local_rel_path`、格式、实际时长。
+
+同步只更新云端信息，不覆盖本地下载状态。云端移除但本地有文件的歌会进入「已取消喜欢」，不会自动删文件。
+
+### 下载管线
+
+```text
+解析候选 → 匹配 → 下载 → 时长校验 → 假无损检测 → 清理标签 → 原子入库
+```
+
+1. **解析**：按设置顺序询问各个通道，拿到候选 URL 和元数据。
+2. **匹配**：优先使用同一 `song_id` 的候选；搜索候选必须通过严格匹配，否则转人工。
+3. **下载**：写入 `data/staging/<song_id>/`。
+4. **时长校验**：实际时长和云端时长不一致会拒绝。
+5. **假无损检测**：解码 PCM 后看频谱截止、码率和高频断崖；灰区进入「待确认」，不会直接入库。
+6. **清理标签**：只保留标题、歌手、专辑、封面等必要项。
+7. **入库**：通过后原子移动到 `music/`，更新数据库。
+
+失败不会留下半成品；重试只重试当前候选，候选仍然失败会尝试同通道的下一个源。
+
+### 匹配规则
+
+- 官方接口/自定义源返回同一 `song_id`：直接认定为同一首歌。
+- 搜索候选：歌名、歌手、专辑做归一化后必须完全相等；时长按整秒比较；候选必须唯一。
+- 不满足以上条件的进入「待确认」，由人工选择，不自动猜。
+
+### 假无损
+
+只看扩展名或码率不够。程序会：
+
+- 解码一段真实 PCM；
+- 做 FFT，检查高频截止和高频能量断崖；
+- 结合码率判断是否像转码产物；
+- 明显不合格直接拒绝，灰区转人工。
+
+目标音质是 320k 时不会套用无损门槛；无损/高解析目标才启用自动频谱闸门。
+
+### 自定义源
+
+自定义源使用 LX 的 `globalThis.lx` 协议：脚本只负责把歌曲 ID 换成播放地址。
+
+自动获取时：
+
+1. 从 `data/source_repos.json` 配置的公开仓库发现脚本；
+2. 校验是否包含 `@name`、`sources`、`lx` 初始化等特征；
+3. 写入临时目录；
+4. 用云端第一首未下载歌曲逐个 `resolve`；
+5. 只把成功的脚本复制为 `auto-*.js`；
+6. 下次下载按排序后的顺序尝试。
+
+第三方源随时可能失效；健康检查和失败换源就是为这个准备的。
+
+### 频谱
+
+- 静态：点击「频谱」时后台生成整首频谱，不缓存。
+- 动态：只在「频谱」页启动，读取当前播放位置附近的一小段 PCM；离开页面立即停止。
+
+---
+
+## 🛠️ 构建
+
+需要 Windows + Python 3.14（项目自带的 `.venv` 可直接用）：
 
 ```powershell
 python -m venv .venv
@@ -96,29 +232,69 @@ python -m venv .venv
 pwsh -NoProfile -File build\build.ps1
 ```
 
-The build produces an onedir program from source and compiles the green installer;
-the final installer is written to the parent `release\` folder.
-Custom sources require `runtime\node.exe`.
+构建会：
 
-## Install and run
+1. 用 PyInstaller 生成 onedir 程序；
+2. 运行 `--selftest`；
+3. 把程序打包成安装器资源；
+4. 用 `csc.exe` 编译绿色安装器；
+5. 把安装包写到仓库上一级的 `release\`。
 
-Run `NeteaseVault-<version>-Setup.exe`, choose an install directory (default:
-`current-directory\NeteaseVault`). The installed layout is:
+自定义源还需要 `runtime\node.exe`。安装器只包含源码构建产物，不手工拼包。
 
-```
-NeteaseVault.exe
-data/          runtime, engine, certificates, database, credentials, logs, cache, staging, custom sources
-music/         library
-```
+---
 
-Apart from `music/`, runtime writes stay in `data/`. The whole folder can be moved;
-delete it to uninstall.
+## 🧹 缓存与迁移
 
-## Login
+设置 → 缓存可分别清理：
 
-QR login was disabled by NetEase (error 8821). Use a cookie: sign in at music.163.com,
-open F12 -> Application -> Cookies, copy `MUSIC_U` and paste it into the login dialog.
+| 项目 | 路径 |
+| --- | --- |
+| 封面缓存 | `data/cache/covers` |
+| 下载暂存 | 设置中的 staging 路径 |
+| 临时文件 | `data/tmp` |
+| musicdl 输出 | `data/musicdl_outputs` |
+| 自动获取音源 | `data/engine/scripts/auto-*.js` |
 
-## License
+「全部清除」会一起清理上述内容，不会动音乐库、数据库、凭证和配置。
 
-MIT
+迁移：退出程序，把整个 `NeteaseVault` 目录复制或移动到新位置，再启动即可。不要只移动 `NeteaseVault.exe`。
+
+---
+
+## ❓ 常见问题
+
+**同步失败/一直转圈？**  
+检查 Cookie 是否过期、网络是否能访问网易云；同步中强制关闭会中断数据库写入。
+
+**下载一直失败？**  
+先看「匹配失败」或「待确认」的原因；再检查下载通道顺序、自定义源健康状态和网络。
+
+**自动获取没有可用音源？**  
+第三方源失效是常态。打开 `data/source_repos.json` 增加仓库，或手动导入可用脚本，再重新健康检查。
+
+**导入 `.js` 后没有出现在列表？**  
+看列表里的加载错误；不是所有 `.js` 都是 LX 音源，脚本本身报错也会导致不可用。
+
+**封面不动/缓存太大？**  
+设置 → 缓存清理封面缓存后重新进入播放页。
+
+**怎么卸载？**  
+退出程序，删除整个安装目录即可；没有注册表、服务或 AppData 残留。
+
+---
+
+## ⚠️ 说明与限制
+
+- 只支持 Windows 10/11。
+- 依赖网易云接口和第三方音源；接口变更、源失效都可能导致下载失败。
+- 假无损检测是启发式判断，不保证 100% 识别所有转码；灰区交给人判断。
+- 自动获取的音源来自公开第三方仓库，可用性不由本项目保证。
+- 本项目不提供音乐内容，只做本地归档和管理。
+- 请只处理你有权保存的内容。
+
+---
+
+## 📄 许可
+
+MIT，见 [LICENSE](LICENSE)。
