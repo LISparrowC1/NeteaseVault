@@ -118,7 +118,8 @@ class PlayerBar(QFrame):
 
         self.spectrum_bar = SpectrumBar(self._player, self)
         self.spectrum_bar.setVisible(False)
-        outer.addWidget(self.spectrum_bar)
+        self.spectrum_bar.lower()
+        self._place_spectrum()
 
         # -- thin top row: title + artist ---------------------------------
         top = QHBoxLayout()
@@ -272,9 +273,17 @@ class PlayerBar(QFrame):
     def _toggle_spectrum(self, checked: bool) -> None:
         self.spectrum_bar.setVisible(checked)
         self.spectrum_bar.set_active(checked)
-        self.setFixedHeight(126 if checked else 80)
+        self.spectrum_bar.lower()
         if checked and self._current is not None:
             self.spectrum_bar.set_path(self._current)
+
+    def _place_spectrum(self) -> None:
+        self.spectrum_bar.setGeometry(0, max(0, self.height() - 26),
+                                      self.width(), 26)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._place_spectrum()
 
     # -- slots ------------------------------------------------------------
 

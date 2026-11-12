@@ -10,7 +10,7 @@
 - 假无损检测：入库前解码 PCM，按频谱截止、码率与高频断崖判断，灰区转人工
 - 暂存区校验后原子入库，文件名固定为 `歌名 - 歌手.ext`，标签只保留四项
 - 七个视图：网易歌单、已取消喜欢、失效、等待下载、待确认、匹配失败、已下载
-- 内置播放器；播放页可切换歌词/整首频谱，播放栏可打开实时频谱条
+- 内置播放器；播放页可切换歌词/整首频谱，播放栏内有 25% 不透明窄柱实时频谱
 - Cookie 登录，凭证用 Windows DPAPI 加密
 - 绿色安装包：安装后整个目录可移动，删除目录即卸载，不写注册表/AppData
 
@@ -32,9 +32,8 @@ pwsh -NoProfile -File build\build.ps1
 
 ```
 NeteaseVault.exe
-_internal/     运行库、引擎、证书
+data/          运行库、引擎、证书、数据库、凭证、日志、缓存、暂存、自定义源脚本
 music/         音乐库
-data/          数据库、凭证、日志、缓存、暂存、自定义源脚本
 ```
 
 除了 `music/`，运行期写入都在 `data/`；目录可整体搬走。删除整个目录即卸载。
@@ -67,8 +66,8 @@ validate them strictly and keep a local library that stays playable.
 - Staging area, validation, atomic move into the library
 - Fixed naming (`Title - Artist.ext`) and a four-field tag whitelist
 - Seven views: playlist, unliked, unavailable, waiting, review, failed, downloaded
-- Built-in player with lyrics and a full-track spectrum view; a live spectrum strip
-  can be toggled from the player bar
+- Built-in player with lyrics and a full-track spectrum view; the player bar can show
+  a live 25%-opacity narrow-bar spectrum without increasing its height
 - Cookie login, credentials encrypted with Windows DPAPI
 - Green installer: the installed folder is movable and deleting it uninstalls the app;
   no registry or AppData writes
@@ -92,9 +91,8 @@ Run `NeteaseVault-<version>-Setup.exe`, choose an install directory (default:
 
 ```
 NeteaseVault.exe
-_internal/     runtime, engine, certificates
+data/          runtime, engine, certificates, database, credentials, logs, cache, staging, custom sources
 music/         library
-data/          database, credentials, logs, cache, staging, custom sources
 ```
 
 Apart from `music/`, runtime writes stay in `data/`. The whole folder can be moved;

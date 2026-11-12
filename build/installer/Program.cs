@@ -131,24 +131,29 @@ namespace NeteaseVaultInstaller
             string target = _path.Text.Trim();
             if (target.Length == 0)
             {
-                MessageBox.Show(this, "请选择安装目录。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请选择安装目录。", "提示", MessageBoxButtons.OK, MessageBoxIcon.None);
                 return;
             }
             try
             {
                 target = Path.GetFullPath(target);
+                string root = Path.GetPathRoot(target) ?? "";
+                if (target.Length > root.Length)
+                {
+                    target = target.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                }
             }
             catch (Exception exc)
             {
-                MessageBox.Show(this, "安装目录无效：" + exc.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "安装目录无效：" + exc.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.None);
                 return;
             }
             if (File.Exists(Path.Combine(target, "NeteaseVault.exe")))
             {
                 var answer = MessageBox.Show(
                     this,
-                    "该目录已存在 NeteaseVault。\n\n将覆盖程序文件，保留 music 和 data。继续吗？",
-                    "升级安装", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    "该目录已存在 NeteaseVault。\n\n将覆盖程序文件，保留 music 和 data 里的个人数据。继续吗？",
+                    "升级安装", MessageBoxButtons.YesNo, MessageBoxIcon.None);
                 if (answer != DialogResult.Yes)
                 {
                     return;
@@ -165,6 +170,13 @@ namespace NeteaseVaultInstaller
                 Directory.CreateDirectory(target);
                 Directory.CreateDirectory(Path.Combine(target, "music"));
                 Directory.CreateDirectory(Path.Combine(target, "data"));
+                string legacyInternal = Path.Combine(target, "_internal");
+                if (Directory.Exists(legacyInternal))
+                {
+                    try { Directory.Delete(legacyInternal, true); }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
 
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip"))
                 {
@@ -179,8 +191,7 @@ namespace NeteaseVaultInstaller
                         foreach (ZipArchiveEntry entry in archive.Entries)
                         {
                             string relative = entry.FullName.Replace('/', Path.DirectorySeparatorChar);
-                            if (relative.StartsWith("music" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-                                relative.StartsWith("data" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                            if (relative.StartsWith("music" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                             {
                                 done++;
                                 continue;
@@ -191,7 +202,10 @@ namespace NeteaseVaultInstaller
                                 continue;
                             }
                             string destination = Path.GetFullPath(Path.Combine(target, relative));
-                            if (!destination.StartsWith(target + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                            string prefix = target.EndsWith(Path.DirectorySeparatorChar.ToString())
+                                ? target
+                                : target + Path.DirectorySeparatorChar;
+                            if (!destination.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                             {
                                 throw new InvalidOperationException("安装包路径非法：" + relative);
                             }
@@ -217,7 +231,7 @@ namespace NeteaseVaultInstaller
             catch (Exception exc)
             {
                 _status.Text = "安装失败";
-                MessageBox.Show(this, "安装失败：" + exc.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "安装失败：" + exc.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.None);
                 _install.Enabled = true;
                 _browse.Enabled = true;
                 _path.Enabled = true;

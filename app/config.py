@@ -48,8 +48,7 @@ def app_root() -> Path:
 def bundle_root() -> Path:
     """Read-only resources shipped with the program.
 
-    Bundled data (engine, runtime, schema.sql) lives in the onedir ``_internal``
-    folder, never next to the writable data directories.
+    Bundled data (engine, runtime, schema.sql) and user data both live in ``data``.
     """
     if getattr(sys, "frozen", False):
         return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))

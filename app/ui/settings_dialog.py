@@ -6,10 +6,11 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
                                QHBoxLayout, QLabel, QLineEdit, QListWidget,
-                               QMessageBox, QPushButton, QSpinBox, QTabWidget,
+                               QPushButton, QSpinBox, QTabWidget,
                                QVBoxLayout, QWidget)
 
 from ..config import save_config
+from .messagebox import QMessageBox
 
 CHANNEL_LABELS = {"musicdl": "musicdl", "source": "自定义源", "official": "官方接口"}
 

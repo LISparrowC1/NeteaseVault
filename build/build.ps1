@@ -48,7 +48,7 @@ $content = Get-Content $out -Raw
 Write-Output "自检输出: $content"
 if ($content -notmatch 'selftest ok') { throw "自检失败" }
 Remove-Item $out -Force
-foreach ($extra in 'data', 'music') {
+foreach ($extra in 'data\tmp', 'music') {
     $path = Join-Path $appDir $extra
     if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
 }

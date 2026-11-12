@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-from .config import app_root, ensure_layout, temp_dir
+from .config import app_root, data_dir, ensure_layout, temp_dir
 from .ui import theme
 from .ui.main_window import MainWindow
 
@@ -42,8 +42,8 @@ def _setup_logging() -> None:
 def _prepare_ca_bundle() -> Path | None:
     """Keep a writable CA copy inside ``data/``.
 
-    certifi ships in ``_internal``; pointing requests at a persistent copy means a
-    moved installation and any future runtime-folder cleanup cannot break HTTPS.
+    certifi ships inside the bundled ``data`` tree; pointing requests at a persistent
+    copy means a moved installation and any future cleanup cannot break HTTPS.
     """
     try:
         import certifi
@@ -108,6 +108,7 @@ def main() -> int:
         return _selftest()
 
     ensure_layout()
+    os.chdir(data_dir())
     tmp = temp_dir()
     os.environ["TMP"] = os.environ["TEMP"] = os.environ["TMPDIR"] = str(tmp)
     tempfile.tempdir = str(tmp)

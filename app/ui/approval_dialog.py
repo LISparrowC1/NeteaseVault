@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtWidgets import (QDialog, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
+from PySide6.QtWidgets import (QDialog, QHBoxLayout, QHeaderView, QLabel,
                                QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from ..config import load_config, path_setting
@@ -18,6 +18,7 @@ from ..core.download import download_chosen
 from ..core.match import match_candidate
 from ..db.store import Store
 from . import theme
+from .messagebox import QMessageBox
 
 COLUMNS = ["来源", "标题", "艺术家", "专辑", "时长", "音质", "大小", "校验"]
 

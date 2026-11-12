@@ -19,7 +19,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QThread, QUrl, Signal
 from PySide6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QListView,
-                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
+                               QListWidget, QListWidgetItem, QMainWindow,
                                QProgressBar, QPushButton, QSizePolicy, QStackedWidget,
                                QVBoxLayout, QWidget)
 
@@ -33,6 +33,7 @@ from ..db.store import Store
 from ..security import CredentialStore
 from .account_dialog import AccountDialog
 from .login_dialog import LoginDialog
+from .messagebox import QMessageBox
 from .appicon import app_icon
 from .icons import LIST_ICONS, outline_icon
 from .models import TrackDelegate, TrackModel

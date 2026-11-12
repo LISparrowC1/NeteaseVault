@@ -16,7 +16,7 @@ from ..core.spectrum import live_levels
 
 
 class SpectrumBar(QWidget):
-    BANDS = 48
+    BANDS = 64
 
     def __init__(self, player, parent: QWidget | None = None):
         super().__init__(parent)
@@ -24,8 +24,9 @@ class SpectrumBar(QWidget):
         self._path: Path | None = None
         self._active = False
         self._levels = [0.0] * self.BANDS
-        self.setFixedHeight(42)
+        self.setFixedHeight(26)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.setStyleSheet("background: transparent;")
         self._timer = QTimer(self)
         self._timer.setInterval(90)
@@ -58,17 +59,18 @@ class SpectrumBar(QWidget):
             painter.end()
             return
         gap = 3.0
-        bar_width = max(2.0, (width - gap * (self.BANDS - 1)) / self.BANDS)
+        slot = width / self.BANDS
+        bar_width = 2.0
         for index, level in enumerate(self._levels):
-            x = index * (bar_width + gap)
-            bar_height = max(2.0, (height - 8) * max(0.02, level))
-            top = height - 4 - bar_height
-            # Blue at the low end, purple at the peaks.
+            x = index * slot
+            bar_height = max(1.5, (height - 5) * max(0.02, level))
+            top = height - 2 - bar_height
+            # Blue at the low end, purple at the peaks; 25% alpha columns.
             color = QColor(
                 int(40 + 170 * level),
                 int(70 + 20 * level),
                 int(180 + 70 * level),
-                int(70 + 170 * level),
+                64,
             )
             painter.setPen(Qt.NoPen)
             painter.setBrush(color)

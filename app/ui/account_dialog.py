@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton,
+from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QPushButton,
                                QVBoxLayout)
 
 from ..core.netease import NeteaseClient
@@ -10,6 +10,7 @@ from ..db.store import Store
 from ..security import CredentialStore
 from . import theme
 from .login_dialog import LoginDialog
+from .messagebox import QMessageBox
 
 
 class AccountDialog(QDialog):

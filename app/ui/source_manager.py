@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
-                               QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
+                               QPushButton, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
 
 from ..config import engine_dir, load_config
@@ -19,6 +19,7 @@ from ..core.channels.source_channel import music_info
 from ..core.engine_client import EngineClient
 from ..db.store import Store
 from . import theme
+from .messagebox import QMessageBox
 from .workers import Worker
 
 

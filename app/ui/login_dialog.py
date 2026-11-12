@@ -6,11 +6,12 @@ import re
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QHBoxLayout,
-                               QLabel, QMessageBox, QPlainTextEdit, QPushButton,
+                               QLabel, QPlainTextEdit, QPushButton,
                                QVBoxLayout)
 
 from ..core.netease import NeteaseClient
 from ..security import CredentialStore
+from .messagebox import QMessageBox
 
 COOKIE_PAIR = re.compile(r"([A-Za-z0-9_]+)=([^;\"'\s]+)")
 JSON_PAIR = re.compile(r'"([A-Za-z0-9_]+)"\s*:\s*"([^"]+)"')
