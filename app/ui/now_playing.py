@@ -64,13 +64,12 @@ class _CoverLoader(threading.Thread):
 
     def run(self) -> None:
         data = covers.load(self._url) or covers.fetch(self._url)
-        if data:
-            self._callback(data)
+        self._callback(data or b"")
 
 
 class NowPlayingPage(QWidget):
     back_requested = Signal()
-    cover_ready = Signal(bytes)
+    cover_ready = Signal(str, bytes)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -114,11 +113,6 @@ class NowPlayingPage(QWidget):
         self.mode = SegmentedControl()
         self.mode.changed.connect(self._set_mode)
         left.addWidget(self.mode, 0, Qt.AlignLeft)
-        live_label = QLabel("实时频谱")
-        live_label.setStyleSheet(f"color:{theme.TEXT_FAINT}; font-size:10px;")
-        left.addWidget(live_label)
-        self.live = LiveSpectrum()
-        left.addWidget(self.live)
         left.addStretch(1)
         body.addLayout(left)
 
@@ -128,9 +122,16 @@ class NowPlayingPage(QWidget):
         self.lyrics.setSelectionMode(QListWidget.NoSelection)
         self.lyrics.setVerticalScrollMode(QListWidget.ScrollPerPixel)
         self.spectrum = SpectrumView()
+        self.live = LiveSpectrum()
+        self.spectrum_page = QWidget()
+        spectrum_layout = QVBoxLayout(self.spectrum_page)
+        spectrum_layout.setContentsMargins(0, 0, 0, 0)
+        spectrum_layout.setSpacing(6)
+        spectrum_layout.addWidget(self.spectrum, 1)
+        spectrum_layout.addWidget(self.live)
         self.content = QStackedWidget()
         self.content.addWidget(self.lyrics)
-        self.content.addWidget(self.spectrum)
+        self.content.addWidget(self.spectrum_page)
         body.addWidget(self.content, 1)
         root.addLayout(body, 1)
 
@@ -148,6 +149,7 @@ class NowPlayingPage(QWidget):
         self.content.setCurrentIndex(0)
         self.spectrum.clear()
         self.live.set_track(path, player)
+        self.live.set_active(False)
         self.title.setText(title or path.stem)
         self.meta.setText("\n".join(part for part in (artist, album) if part))
         self._player = player
@@ -170,10 +172,19 @@ class NowPlayingPage(QWidget):
         else:
             self.lyrics.addItem(QListWidgetItem("这首歌没有内嵌歌词。"))
 
-        self._placeholder()
-        if cover_url and cover_url != self._cover_url:
+        pixmap = self.cover.pixmap()
+        has_cover = pixmap is not None and not pixmap.isNull()
+        keep_cover = bool(cover_url and cover_url == self._cover_url and has_cover)
+        if not keep_cover:
+            self._placeholder()
+        if cover_url and not keep_cover:
             self._cover_url = cover_url
-            _CoverLoader(cover_url, self.cover_ready.emit).start()
+            _CoverLoader(
+                cover_url,
+                lambda data, url=cover_url: self.cover_ready.emit(url, data),
+            ).start()
+        elif not cover_url:
+            self._cover_url = ""
         self.timer.start(250)
 
     def stop(self) -> None:
@@ -185,15 +196,20 @@ class NowPlayingPage(QWidget):
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
-        if self._path is not None and self._player is not None:
-            self.live.set_active(True)
+        self.resume_live()
 
     def hideEvent(self, event) -> None:  # noqa: N802
         self.live.set_active(False)
         super().hideEvent(event)
 
+    def resume_live(self) -> None:
+        self.live.set_active(
+            self.mode.current() == 1 and self.isVisible() and self._path is not None)
+
     def _set_mode(self, index: int) -> None:
         self.content.setCurrentIndex(1 if index else 0)
+        self.live.set_active(
+            bool(index) and self.isVisible() and self._path is not None)
         if index and self._path is not None:
             self.spectrum.show_path(self._path)
         else:
@@ -208,9 +224,15 @@ class NowPlayingPage(QWidget):
             f" color:{theme.TEXT_FAINT}; }}")
         self.cover.setText("暂无封面")
 
-    def _apply_cover(self, data: bytes) -> None:
+    def _apply_cover(self, url: str, data: bytes) -> None:
+        if url != self._cover_url:
+            return
+        if not data:
+            self._placeholder()
+            return
         pixmap = QPixmap()
         if not pixmap.loadFromData(data):
+            self._placeholder()
             return
         scaled = pixmap.scaled(320, 320, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
         self.cover.setPixmap(scaled)

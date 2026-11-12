@@ -9,7 +9,7 @@ import hashlib
 import shutil
 from pathlib import Path
 
-from ..config import app_root
+from ..config import app_root, temp_dir
 
 
 def cache_dir() -> Path:
@@ -61,18 +61,43 @@ def cache_size() -> tuple[int, int]:
     return len(files), sum(p.stat().st_size for p in files)
 
 
-def clear() -> int:
-    """Drop cached covers and any leftover staging data. Returns bytes freed."""
+def cache_paths() -> list[tuple[str, Path]]:
+    return [
+        ("封面缓存", cache_dir()),
+        ("下载暂存", app_root() / "data" / "staging"),
+        ("临时文件", temp_dir()),
+        ("musicdl 输出", app_root() / "data" / "musicdl_outputs"),
+    ]
+
+
+def path_size(path: Path) -> tuple[int, int]:
+    if not path.exists():
+        return 0, 0
+    files = [p for p in path.rglob("*") if p.is_file()]
+    return len(files), sum(p.stat().st_size for p in files)
+
+
+def clear_path(path: Path) -> int:
+    if not path.exists():
+        return 0
     freed = 0
-    for directory in (cache_dir(), app_root() / "data" / "staging"):
-        if not directory.exists():
+    for child in list(path.iterdir()):
+        try:
+            if child.is_dir():
+                freed += sum(p.stat().st_size for p in child.rglob("*") if p.is_file())
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                freed += child.stat().st_size
+                child.unlink(missing_ok=True)
+        except OSError:
             continue
-        for path in directory.rglob("*"):
-            if path.is_file():
-                try:
-                    freed += path.stat().st_size
-                except OSError:
-                    pass
-        shutil.rmtree(directory, ignore_errors=True)
-    cache_dir()
     return freed
+
+
+def clear_all() -> int:
+    return sum(clear_path(path) for _, path in cache_paths())
+
+
+def clear() -> int:
+    """Compatibility helper: drop every managed cache path."""
+    return clear_all()

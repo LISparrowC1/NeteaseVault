@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..core.spectrum import live_levels
 
@@ -25,7 +25,9 @@ class LiveSpectrum(QWidget):
         self._path: Path | None = None
         self._active = False
         self._levels = [0.0] * self.HALF_BANDS
-        self.setFixedSize(300, 92)
+        self.setFixedHeight(55)
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
         self._timer = QTimer(self)
@@ -80,10 +82,10 @@ class LiveSpectrum(QWidget):
             bar_height = max(1.5, (height - 8) * max(0.02, level))
             top = height - 3 - bar_height
             color = QColor(
-                int(48 + 150 * level),
-                int(82 + 20 * level),
-                int(200 + 55 * level),
-                220,
+                int(24 + 96 * level),
+                int(38 + 28 * level),
+                int(120 + 72 * level),
+                128,
             )
             painter.setPen(Qt.NoPen)
             painter.setBrush(color)

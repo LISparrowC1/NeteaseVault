@@ -727,7 +727,7 @@ class MainWindow(QMainWindow):
     def _on_sync_done(self, report) -> None:
         self.sync_btn.setEnabled(True)
         self.sync_btn.setText("同步")
-        self.now_page.live.set_active(self.now_page.isVisible())
+        self.now_page.resume_live()
         self.status_label.setVisible(False)
         self._refresh_account_card()
         # The cloud list just changed; re-derive which files are already downloaded.
@@ -747,7 +747,7 @@ class MainWindow(QMainWindow):
 
     def _on_worker_failed(self, message: str) -> None:
         self._downloading = False
-        self.now_page.live.set_active(self.now_page.isVisible())
+        self.now_page.resume_live()
         self.sync_btn.setEnabled(True)
         self.sync_btn.setText("同步")
         self.download_btn.setEnabled(True)
@@ -896,7 +896,12 @@ class MainWindow(QMainWindow):
                 return
         if self._download_worker is not None and self._download_worker.isRunning():
             self._download_worker.stop()
-            self._download_worker.wait(3000)
+            if not self._download_worker.wait(5000):
+                QMessageBox.information(
+                    self, "正在停止下载",
+                    "下载线程还没结束，请稍等几秒再关闭，避免引擎进程被强行回收。")
+                event.ignore()
+                return
         self.now_page.stop()
         self.player.stop()
         self.store.close()

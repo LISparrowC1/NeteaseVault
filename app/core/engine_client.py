@@ -22,6 +22,7 @@ class EngineClient:
         self.user_scripts_dir = user_scripts_dir or _user_scripts_dir()
         self._node = node_exe
         self._proc: subprocess.Popen | None = None
+        self._closed = False
         self._lock = threading.Lock()
         self._next_id = 1
         self._stderr_lines: list[str] = []
@@ -40,6 +41,8 @@ class EngineClient:
         return found
 
     def _ensure(self) -> subprocess.Popen:
+        if self._closed:
+            raise EngineError("引擎已关闭")
         if self._proc is not None and self._proc.poll() is None:
             return self._proc
         script = self.engine_dir / "index.js"
@@ -68,9 +71,12 @@ class EngineClient:
         proc = self._proc
         if proc is None or proc.stderr is None:
             return
-        for line in proc.stderr:
-            self._stderr_lines.append(line.rstrip())
-            del self._stderr_lines[:-200]
+        try:
+            for line in proc.stderr:
+                self._stderr_lines.append(line.rstrip())
+                del self._stderr_lines[:-200]
+        except (OSError, ValueError):
+            return
 
     # -- rpc --------------------------------------------------------------
 
@@ -108,6 +114,20 @@ class EngineClient:
         return " | ".join(self._stderr_lines[-limit:])
 
     def close(self) -> None:
-        if self._proc and self._proc.poll() is None:
-            self._proc.kill()
+        proc = self._proc
         self._proc = None
+        if proc is None:
+            return
+        if proc.poll() is None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        try:
+            proc.wait(timeout=2)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    def shutdown(self) -> None:
+        self._closed = True
+        self.close()

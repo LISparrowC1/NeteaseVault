@@ -169,32 +169,82 @@ class SettingsDialog(QDialog):
         return page
 
     def _cache_tab(self) -> QWidget:
+        from ..config import app_root, path_setting, temp_dir
         from ..core import covers
 
         page = QWidget()
-        form = QFormLayout(page)
-        count, size = covers.cache_size()
-        self.cache_path_label = QLabel(str(covers.cache_dir()))
-        self.cache_path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.cache_info_label = QLabel(f"{count} 个文件，{size / 1048576:.1f} MB")
-        clear = QPushButton("清除缓存")
-        clear.clicked.connect(self._clear_cache)
-        form.addRow("封面缓存目录", self.cache_path_label)
-        form.addRow("当前占用", self.cache_info_label)
-        note = QLabel("清除封面缓存、暂存区残留与 musicdl 输出文件；不会动音乐库。")
+        layout = QVBoxLayout(page)
+        layout.setSpacing(8)
+        layout.addWidget(QLabel("缓存与临时目录"))
+        self._cache_rows = []
+        paths = [
+            ("封面缓存", covers.cache_dir()),
+            ("下载暂存", path_setting(self.config, "staging")),
+            ("临时文件", temp_dir()),
+            ("musicdl 输出", app_root() / "data" / "musicdl_outputs"),
+        ]
+        for label, path in paths:
+            row = QHBoxLayout()
+            info = QVBoxLayout()
+            name = QLabel(label)
+            name.setStyleSheet("font-weight:600;")
+            path_label = QLabel(str(path))
+            path_label.setWordWrap(True)
+            path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            path_label.setStyleSheet("color:#8A8F98; font-size:11px;")
+            info.addWidget(name)
+            info.addWidget(path_label)
+            row.addLayout(info, 1)
+            size_label = QLabel("")
+            size_label.setStyleSheet("color:#8A8F98;")
+            row.addWidget(size_label)
+            clear = QPushButton("清除")
+            clear.setFixedWidth(58)
+            clear.clicked.connect(
+                lambda checked=False, p=path, l=label: self._clear_cache_path(l, p))
+            row.addWidget(clear)
+            layout.addLayout(row)
+            self._cache_rows.append((label, path, size_label))
+        self.cache_total_label = QLabel("")
+        self.cache_total_label.setStyleSheet("color:#8A8F98;")
+        layout.addWidget(self.cache_total_label)
+        all_clear = QPushButton("全部清除")
+        all_clear.clicked.connect(self._clear_cache)
+        layout.addWidget(all_clear, alignment=Qt.AlignLeft)
+        note = QLabel("只清理上面列出的缓存/临时目录，不会动音乐库、数据库和设置。")
         note.setWordWrap(True)
         note.setStyleSheet("color:#8A8F98;")
-        form.addRow("", note)
-        form.addRow("", clear)
+        layout.addWidget(note)
+        layout.addStretch(1)
+        self._refresh_cache_labels()
         return page
+
+    def _refresh_cache_labels(self) -> None:
+        from ..core import covers
+
+        total_files = 0
+        total_size = 0
+        for _label, path, size_label in self._cache_rows:
+            count, size = covers.path_size(path)
+            total_files += count
+            total_size += size
+            size_label.setText(f"{count} 个文件，{size / 1048576:.1f} MB")
+        self.cache_total_label.setText(
+            f"合计：{total_files} 个文件，{total_size / 1048576:.1f} MB")
+
+    def _clear_cache_path(self, label: str, path: Path) -> None:
+        from ..core import covers
+
+        freed = covers.clear_path(path)
+        self._refresh_cache_labels()
+        QMessageBox.information(self, "已清除", f"{label}：释放 {freed / 1048576:.1f} MB")
 
     def _clear_cache(self) -> None:
         from ..core import covers
 
-        freed = covers.clear()
-        count, size = covers.cache_size()
-        self.cache_info_label.setText(f"{count} 个文件，{size / 1048576:.1f} MB")
-        QMessageBox.information(self, "已清除", f"释放 {freed / 1048576:.1f} MB")
+        freed = sum(covers.clear_path(path) for _, path, _ in self._cache_rows)
+        self._refresh_cache_labels()
+        QMessageBox.information(self, "已清除", f"全部缓存：释放 {freed / 1048576:.1f} MB")
 
     def _sources_tab(self) -> QWidget:
         page = QWidget()

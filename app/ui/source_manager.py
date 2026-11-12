@@ -33,6 +33,7 @@ class SourceManagerDialog(QDialog):
         self.engine = EngineClient(engine_dir())
         self.rows: list[dict] = []
         self._worker: Worker | None = None
+        self._cleaning = False
 
         layout = QVBoxLayout(self)
         self.scripts_dir = self.engine.user_scripts_dir
@@ -73,6 +74,7 @@ class SourceManagerDialog(QDialog):
         row.addWidget(close)
         layout.addLayout(row)
 
+        self.finished.connect(self._cleanup)
         self.reload()
 
     # -- loading ----------------------------------------------------------
@@ -133,15 +135,24 @@ class SourceManagerDialog(QDialog):
         target.mkdir(parents=True, exist_ok=True)
         for path in files:
             shutil.copy2(path, target / Path(path).name)
+        self.engine.close()
         QMessageBox.information(self, "已导入", f"复制 {len(files)} 个脚本，正在重新加载。")
         self.reload()
 
     def _health(self) -> None:
         rows = self.store.list_tracks()
         sample = next((row for row in rows if row["cloud_playable"]), None)
+        if sample is None and rows:
+            sample = rows[0]
         if sample is None:
-            QMessageBox.warning(self, "没有样本", "库里还没有可用于测试的歌曲。")
-            return
+            sample = {
+                "song_id": 347230,
+                "title": "海阔天空",
+                "artist": "Beyond",
+                "album": "乐与怒",
+                "duration_ms": 326000,
+                "cloud_playable": 1,
+            }
         info = music_info(sample)
         targets = [row for row in self.rows
                    if not row.get("error") and "wy" in (row.get("sources") or {})]
@@ -178,11 +189,25 @@ class SourceManagerDialog(QDialog):
             index = index_by_file.get(file_path)
             if index is None or self.table.item(index, 5) is None:
                 continue
-            self.table.item(index, 5).setText(f"OK {latency}ms" if ok else "失败")
-            self.table.item(index, 5).setForeground(Qt.green if ok else Qt.yellow)
+            cell = self.table.item(index, 5)
+            cell.setText(f"OK {latency}ms" if ok else "失败")
+            cell.setToolTip(note or ("可用" if ok else "解析失败"))
+            cell.setForeground(Qt.green if ok else Qt.yellow)
         ok_count = sum(1 for _, ok, _, _ in results if ok)
         self._set_busy(False, f"健康检查完成：{ok_count}/{len(results)} 可用")
 
+    def _cleanup(self, *_args) -> None:
+        if self._cleaning:
+            return
+        self._cleaning = True
+        worker = self._worker
+        if worker is not None and worker.isRunning():
+            self.engine.shutdown()
+            if not worker.wait(10000):
+                worker.terminate()
+                worker.wait(1000)
+        self.engine.shutdown()
+
     def closeEvent(self, event) -> None:  # noqa: N802
-        self.engine.close()
+        self._cleanup()
         super().closeEvent(event)
