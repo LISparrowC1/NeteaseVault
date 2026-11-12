@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QHeaderView, Q
                                QVBoxLayout)
 
 from ..config import engine_dir, load_config
+from ..core import source_fetcher
 from ..core.channels.source_channel import music_info
 from ..core.engine_client import EngineClient
 from ..core.netease import NeteaseClient
@@ -64,6 +65,8 @@ class SourceManagerDialog(QDialog):
         self.refresh_btn.clicked.connect(self.reload)
         self.import_btn = QPushButton("导入源脚本…")
         self.import_btn.clicked.connect(self._import)
+        self.fetch_btn = QPushButton("自动获取最新音源")
+        self.fetch_btn.clicked.connect(self._auto_fetch)
         self.health_btn = QPushButton("全部健康检查")
         self.health_btn.setObjectName("Accent")
         self.health_btn.clicked.connect(self._health)
@@ -71,6 +74,7 @@ class SourceManagerDialog(QDialog):
         close.clicked.connect(self.reject)
         row.addWidget(self.refresh_btn)
         row.addWidget(self.import_btn)
+        row.addWidget(self.fetch_btn)
         row.addWidget(self.health_btn)
         row.addStretch(1)
         row.addWidget(close)
@@ -83,7 +87,7 @@ class SourceManagerDialog(QDialog):
     # -- loading ----------------------------------------------------------
 
     def _set_busy(self, busy: bool, message: str = "") -> None:
-        for button in (self.refresh_btn, self.import_btn, self.health_btn):
+        for button in (self.refresh_btn, self.import_btn, self.fetch_btn, self.health_btn):
             button.setEnabled(not busy)
         self.status.setText(message)
 
@@ -145,9 +149,7 @@ class SourceManagerDialog(QDialog):
     def _looks_like_source(path: Path, text: str) -> bool:
         if path.name.lower() == "lx-shim.js":
             return False
-        if "@name" not in text:
-            return False
-        return "lx.send" in text and "sources" in text
+        return source_fetcher.is_source(text)
 
     def _import(self) -> None:
         start = (QStandardPaths.writableLocation(QStandardPaths.DownloadLocation)
@@ -179,6 +181,39 @@ class SourceManagerDialog(QDialog):
         self.engine.close()
         QMessageBox.information(self, "已导入", f"复制 {len(files)} 个脚本，正在重新加载。")
         self.reload()
+
+    def _auto_fetch(self) -> None:
+        if self.credentials is None or not self.credentials.has_cookie():
+            QMessageBox.warning(self, "未登录", "自动更新音源需要登录后取真实云端样本。")
+            return
+        self._set_busy(True, "正在从 GitHub 获取最新音源…")
+        worker = Worker(lambda: self._do_auto_fetch(
+            lambda message: worker.progress.emit(message)))
+        worker.progress.connect(self.status.setText)
+        worker.finished_ok.connect(self._on_auto_fetch_done)
+        worker.failed.connect(self._on_error)
+        self._worker = worker
+        worker.start()
+
+    def _do_auto_fetch(self, progress) -> list[str]:
+        candidates = source_fetcher.fetch_candidates(progress)
+        if not candidates:
+            return []
+        return source_fetcher.install_candidates(
+            candidates, self.credentials.load_cookie(), self.store.db_path,
+            self.scripts_dir, progress)
+
+    def _on_auto_fetch_done(self, names: list) -> None:
+        self.engine.close()
+        self.reload()
+        if not names:
+            QMessageBox.warning(
+                self, "没有可用音源",
+                "从各仓库拉取的脚本都没有通过真实歌曲解析测试，已保留原有音源。")
+            return
+        QMessageBox.information(
+            self, "音源已更新",
+            "已启用以下通过测试的音源：\n" + "\n".join(names))
 
     def _health(self) -> None:
         targets = [row for row in self.rows

@@ -282,24 +282,40 @@ def process_track(track: Any, channels: Sequence[Any], store: Store, *,
             failures.append(f"{channel.name}: {exc}")
             continue
         all_candidates.extend(candidates)
-        chosen, basis = pick_candidate(track, candidates)
-        if chosen is None:
+        chosen, _basis = pick_candidate(track, candidates)
+        if chosen is not None:
+            attempts = [chosen] + [
+                c for c in candidates
+                if c is not chosen and c.url
+                and c.song_id == int(track["song_id"])
+            ]
+        else:
+            # Several scripts can resolve the same authoritative song id.  Keep
+            # them all so a dead URL can fall through to the next source.
+            attempts = [c for c in candidates
+                        if c.url and c.song_id == int(track["song_id"])]
+        if not attempts:
             continue
 
-        path, message = download_chosen(
-            track, chosen, store, library=library, staging=staging,
-            lyric_fetcher=lyric_fetcher, expected_lossless=quality in ("lossless", "hires"),
-            pause_event=pause_event, cancel_event=cancel_event, on_progress=on_progress,
-            min_bitrate=min_bitrate, manual_bitrate=manual_bitrate,
-            retries=retries, rate_limiter=download_limiter)
-        if path is None:
+        for attempt in attempts:
+            path, message = download_chosen(
+                track, attempt, store, library=library, staging=staging,
+                lyric_fetcher=lyric_fetcher,
+                expected_lossless=quality in ("lossless", "hires"),
+                pause_event=pause_event, cancel_event=cancel_event,
+                on_progress=on_progress,
+                min_bitrate=min_bitrate, manual_bitrate=manual_bitrate,
+                retries=retries, rate_limiter=download_limiter)
+            if path is not None:
+                elapsed = int((time.monotonic() - started) * 1000)
+                return TrackResult(song_id, "downloaded", attempt.channel,
+                                   attempt.quality, str(path), message,
+                                   elapsed, all_candidates)
             failures.append(message)
             if _cancelled(cancel_event):
                 break
-            continue
-        elapsed = int((time.monotonic() - started) * 1000)
-        return TrackResult(song_id, "downloaded", chosen.channel, chosen.quality,
-                           str(path), message, elapsed, all_candidates)
+        if _cancelled(cancel_event):
+            break
 
     elapsed = int((time.monotonic() - started) * 1000)
     if _cancelled(cancel_event):
