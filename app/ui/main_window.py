@@ -122,9 +122,19 @@ class DownloadWorker(QThread):
 
         client = NeteaseClient(self._cookie, min_interval=0.0)
         engine = EngineClient(engine_dir())
+        order = []
+        try:
+            lookup = Store(self._db_path)
+            try:
+                order = [row["file_path"] for row in lookup.list_scripts()
+                         if row["enabled"]]
+            finally:
+                lookup.close()
+        except Exception:
+            order = []
         mapping = {
             "musicdl": lambda: MusicdlChannel(self._cookie),
-            "source": lambda: SourceChannel(engine),
+            "source": lambda: SourceChannel(engine, scripts=order or None),
             "official": lambda: OfficialChannel(client),
         }
         order = self._config["download"]["order"]

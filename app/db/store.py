@@ -388,6 +388,12 @@ class Store:
             conn.execute("UPDATE source_script SET enabled=? WHERE file_path=?",
                          (1 if enabled else 0, file_path))
 
+    def set_script_priorities(self, file_paths: list[str]) -> None:
+        with self.tx() as conn:
+            conn.executemany(
+                "UPDATE source_script SET priority=? WHERE file_path=?",
+                [(index, file_path) for index, file_path in enumerate(file_paths)])
+
     def record_health(self, file_path: str, ok: bool, latency_ms: int | None, note: str = "") -> None:
         with self.tx() as conn:
             conn.execute(

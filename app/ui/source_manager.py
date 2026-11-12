@@ -9,7 +9,8 @@ import shutil
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QStandardPaths, Qt
+from PySide6.QtCore import QStandardPaths, Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
                                QPushButton, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
@@ -44,7 +45,8 @@ class SourceManagerDialog(QDialog):
         note = QLabel(
             "源脚本放在：\n"
             f"{self.scripts_dir}\n"
-            "也可以点下面的「导入源脚本…」直接选择 .js 文件，导入后重启程序即可生效。")
+            "也可以点下面的「导入源脚本…」直接选择 .js 文件，导入后重启程序即可生效。\n"
+            f"自动获取的仓库列表：{source_fetcher.spec_path()}")
         note.setTextInteractionFlags(Qt.TextSelectableByMouse)
         note.setStyleSheet(f"color:{theme.TEXT_DIM};")
         layout.addWidget(note)
@@ -67,6 +69,12 @@ class SourceManagerDialog(QDialog):
         self.import_btn.clicked.connect(self._import)
         self.fetch_btn = QPushButton("自动获取最新音源")
         self.fetch_btn.clicked.connect(self._auto_fetch)
+        self.spec_btn = QPushButton("编辑源地址列表")
+        self.spec_btn.clicked.connect(self._edit_spec)
+        self.up_btn = QPushButton("上移")
+        self.up_btn.clicked.connect(lambda: self._move_script(-1))
+        self.down_btn = QPushButton("下移")
+        self.down_btn.clicked.connect(lambda: self._move_script(1))
         self.health_btn = QPushButton("全部健康检查")
         self.health_btn.setObjectName("Accent")
         self.health_btn.clicked.connect(self._health)
@@ -75,6 +83,9 @@ class SourceManagerDialog(QDialog):
         row.addWidget(self.refresh_btn)
         row.addWidget(self.import_btn)
         row.addWidget(self.fetch_btn)
+        row.addWidget(self.spec_btn)
+        row.addWidget(self.up_btn)
+        row.addWidget(self.down_btn)
         row.addWidget(self.health_btn)
         row.addStretch(1)
         row.addWidget(close)
@@ -87,7 +98,8 @@ class SourceManagerDialog(QDialog):
     # -- loading ----------------------------------------------------------
 
     def _set_busy(self, busy: bool, message: str = "") -> None:
-        for button in (self.refresh_btn, self.import_btn, self.fetch_btn, self.health_btn):
+        for button in (self.refresh_btn, self.import_btn, self.fetch_btn,
+                       self.up_btn, self.down_btn, self.health_btn):
             button.setEnabled(not busy)
         self.status.setText(message)
 
@@ -100,20 +112,31 @@ class SourceManagerDialog(QDialog):
 
     def _populate(self, scripts: list) -> None:
         states = self.store.script_state()
-        self.rows = []
-        self.table.setRowCount(len(scripts))
-        for index, item in enumerate(scripts):
+        next_priority = max((int(row.get("priority") or 0) for row in states.values()),
+                            default=-1) + 1
+        ordered = []
+        for item in scripts:
             file_path = item["file"]
             if file_path not in states:
-                self.store.upsert_script(file_path, name=item.get("name") or "",
-                                         version=item.get("version") or "",
-                                         sources=item.get("sources") or {})
-                states[file_path] = {"enabled": 1}
-            self.rows.append({"file": file_path, "name": item.get("name") or "",
-                              "sources": item.get("sources") or {},
-                              "error": item.get("error")})
+                self.store.upsert_script(
+                    file_path, name=item.get("name") or "",
+                    version=item.get("version") or "",
+                    priority=next_priority, sources=item.get("sources") or {})
+                states[file_path] = {"enabled": 1, "priority": next_priority}
+                next_priority += 1
+            priority = int(states[file_path].get("priority") or 0)
             quality = sorted({q for info in (item.get("sources") or {}).values()
                               for q in (info.get("qualitys") or [])})
+            ordered.append((priority, item, quality))
+        ordered.sort(key=lambda entry: entry[0])
+        self.rows = []
+        self.table.setRowCount(len(ordered))
+        for index, (_priority, item, quality) in enumerate(ordered):
+            file_path = item["file"]
+            self.rows.append({"file": file_path, "name": item.get("name") or "",
+                              "version": item.get("version") or "",
+                              "sources": item.get("sources") or {},
+                              "quality": quality, "error": item.get("error")})
             values = [
                 file_path,
                 item.get("name") or "-",
@@ -127,6 +150,20 @@ class SourceManagerDialog(QDialog):
                 cell.setFlags(cell.flags() & ~Qt.ItemIsEditable)
                 self.table.setItem(index, column, cell)
         self._set_busy(False, f"共 {len(scripts)} 个脚本")
+
+    def _move_script(self, delta: int) -> None:
+        row = self.table.currentRow()
+        target = row + delta
+        if row < 0 or not 0 <= target < len(self.rows):
+            return
+        for column in range(self.table.columnCount()):
+            first = self.table.takeItem(row, column)
+            second = self.table.takeItem(target, column)
+            self.table.setItem(row, column, second)
+            self.table.setItem(target, column, first)
+        self.rows[row], self.rows[target] = self.rows[target], self.rows[row]
+        self.store.set_script_priorities([entry["file"] for entry in self.rows])
+        self.table.selectRow(target)
 
     def _on_error(self, message: str) -> None:
         self._set_busy(False, "加载失败")
@@ -181,6 +218,10 @@ class SourceManagerDialog(QDialog):
         self.engine.close()
         QMessageBox.information(self, "已导入", f"复制 {len(files)} 个脚本，正在重新加载。")
         self.reload()
+
+    def _edit_spec(self) -> None:
+        path = source_fetcher.ensure_spec_file()
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def _auto_fetch(self) -> None:
         if self.credentials is None or not self.credentials.has_cookie():

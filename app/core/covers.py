@@ -98,6 +98,22 @@ def clear_all() -> int:
     return sum(clear_path(path) for _, path in cache_paths())
 
 
+def auto_source_size(scripts_dir: Path) -> tuple[int, int]:
+    files = [p for p in scripts_dir.glob("auto-*.js") if p.is_file()]
+    return len(files), sum(p.stat().st_size for p in files)
+
+
+def clear_auto_sources(scripts_dir: Path) -> int:
+    freed = 0
+    for path in scripts_dir.glob("auto-*.js"):
+        try:
+            freed += path.stat().st_size
+            path.unlink(missing_ok=True)
+        except OSError:
+            continue
+    return freed
+
+
 def clear() -> int:
     """Compatibility helper: drop every managed cache path."""
     return clear_all()

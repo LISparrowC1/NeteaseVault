@@ -170,7 +170,7 @@ class SettingsDialog(QDialog):
         return page
 
     def _cache_tab(self) -> QWidget:
-        from ..config import app_root, path_setting, temp_dir
+        from ..config import app_root, path_setting, temp_dir, user_scripts_dir
         from ..core import covers
 
         page = QWidget()
@@ -206,6 +206,27 @@ class SettingsDialog(QDialog):
             row.addWidget(clear)
             layout.addLayout(row)
             self._cache_rows.append((label, path, size_label))
+
+        auto_dir = user_scripts_dir()
+        auto_row = QHBoxLayout()
+        auto_info = QVBoxLayout()
+        auto_name = QLabel("自动获取音源")
+        auto_name.setStyleSheet("font-weight:600;")
+        auto_path = QLabel(f"{auto_dir}（仅 auto-*.js）")
+        auto_path.setWordWrap(True)
+        auto_path.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        auto_path.setStyleSheet("color:#8A8F98; font-size:11px;")
+        auto_info.addWidget(auto_name)
+        auto_info.addWidget(auto_path)
+        auto_row.addLayout(auto_info, 1)
+        self.auto_size_label = QLabel("")
+        self.auto_size_label.setStyleSheet("color:#8A8F98;")
+        auto_row.addWidget(self.auto_size_label)
+        auto_clear = QPushButton("清除")
+        auto_clear.setFixedWidth(58)
+        auto_clear.clicked.connect(self._clear_auto_sources)
+        auto_row.addWidget(auto_clear)
+        layout.addLayout(auto_row)
         self.cache_total_label = QLabel("")
         self.cache_total_label.setStyleSheet("color:#8A8F98;")
         layout.addWidget(self.cache_total_label)
@@ -221,6 +242,7 @@ class SettingsDialog(QDialog):
         return page
 
     def _refresh_cache_labels(self) -> None:
+        from ..config import user_scripts_dir
         from ..core import covers
 
         total_files = 0
@@ -230,8 +252,20 @@ class SettingsDialog(QDialog):
             total_files += count
             total_size += size
             size_label.setText(f"{count} 个文件，{size / 1048576:.1f} MB")
+        auto_count, auto_size = covers.auto_source_size(user_scripts_dir())
+        self.auto_size_label.setText(
+            f"{auto_count} 个文件，{auto_size / 1048576:.1f} MB")
         self.cache_total_label.setText(
-            f"合计：{total_files} 个文件，{total_size / 1048576:.1f} MB")
+            f"合计：{total_files + auto_count} 个文件，"
+            f"{(total_size + auto_size) / 1048576:.1f} MB")
+
+    def _clear_auto_sources(self) -> None:
+        from ..config import user_scripts_dir
+        from ..core import covers
+
+        freed = covers.clear_auto_sources(user_scripts_dir())
+        self._refresh_cache_labels()
+        QMessageBox.information(self, "已清除", f"自动音源：释放 {freed / 1048576:.1f} MB")
 
     def _clear_cache_path(self, label: str, path: Path) -> None:
         from ..core import covers
@@ -241,9 +275,11 @@ class SettingsDialog(QDialog):
         QMessageBox.information(self, "已清除", f"{label}：释放 {freed / 1048576:.1f} MB")
 
     def _clear_cache(self) -> None:
+        from ..config import user_scripts_dir
         from ..core import covers
 
         freed = sum(covers.clear_path(path) for _, path, _ in self._cache_rows)
+        freed += covers.clear_auto_sources(user_scripts_dir())
         self._refresh_cache_labels()
         QMessageBox.information(self, "已清除", f"全部缓存：释放 {freed / 1048576:.1f} MB")
 

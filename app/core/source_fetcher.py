@@ -8,6 +8,7 @@ cloud song before it is installed.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -19,7 +20,7 @@ from typing import Callable
 
 import requests
 
-from ..config import engine_dir, temp_dir
+from ..config import data_dir, engine_dir, temp_dir
 from .channels.source_channel import music_info
 from .engine_client import EngineClient
 from .netease import NeteaseClient
@@ -35,32 +36,84 @@ class Repo:
     owner: str
     name: str
     branch: str
-    include: Callable[[str], bool]
+    starts: str = ""
+    ends: str = ".js"
+    contains: str = ""
     limit: int = 3
 
+    def matches(self, path: str) -> bool:
+        return (path.startswith(self.starts) and path.endswith(self.ends)
+                and self.contains in path)
 
-REPOS = [
-    Repo("pdone", "lx-music-source", "main",
-         lambda p: p.endswith("/latest.js"), 3),
-    Repo("guoyue2010", "lxmusic-", "main",
-         lambda p: p.startswith("V2603_latest/") and p.endswith(".js"), 3),
-    Repo("shellsec", "lx-music-source", "master",
-         lambda p: p.startswith("sources/") and p.endswith(".js"), 3),
-    Repo("moxi5445", "lx-music-cloud", "main",
-         lambda p: p.endswith(".js"), 1),
-    Repo("Lingeng27", "lx-music-1010-source", "main",
-         lambda p: p.endswith(".js"), 1),
+
+DEFAULT_REPOS = [
+    Repo("pdone", "lx-music-source", "main", ends="/latest.js", limit=3),
+    Repo("pdone", "lx-music-source", "main", starts="xinghai/",
+         ends="latest.js", limit=1),
+    Repo("guoyue2010", "lxmusic-", "main", starts="V2603_latest/",
+         ends=".js", limit=3),
+    Repo("shellsec", "lx-music-source", "master", starts="sources/",
+         ends=".js", limit=3),
+    Repo("moxi5445", "lx-music-cloud", "main", ends=".js", limit=1),
+    Repo("Lingeng27", "lx-music-1010-source", "main", ends=".js", limit=1),
     Repo("LuoXiaohei-2025", "LX-music-collection", "main",
-         lambda p: p.startswith("Source of music/") and p.endswith(".js"), 1),
+         starts="Source of music/", ends=".js", limit=1),
+    Repo("LuoXiaohei-2025", "LX-music-collection", "main",
+         starts="Source of music/", contains="星海", ends=".js", limit=1),
+    Repo("jiaru1", "yinyueyuan", "main", ends="latest.js", limit=1),
+    Repo("xiaoxiansheng-123", "lx-music-source", "main",
+         ends=".js", limit=3),
 ]
 
-FALLBACK_URLS = [
+DEFAULT_FALLBACK = [
     ("pdone", "changqing/latest.js"),
     ("pdone", "feichangdao/latest.js"),
     ("pdone", "fish/latest.js"),
     ("shellsec", "sources/xinghai/星海音乐源.js"),
     ("LuoXiaohei-2025", "Source of music/星海音乐源.js"),
 ]
+
+REPOS = DEFAULT_REPOS
+FALLBACK_URLS = DEFAULT_FALLBACK
+
+
+def spec_path() -> Path:
+    return data_dir() / "source_repos.json"
+
+
+def ensure_spec_file() -> Path:
+    path = spec_path()
+    if path.exists():
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "repositories": [
+            {"owner": r.owner, "name": r.name, "branch": r.branch,
+             "starts": r.starts, "ends": r.ends, "contains": r.contains,
+             "limit": r.limit}
+            for r in DEFAULT_REPOS
+        ],
+        "fallback_urls": [{"owner": o, "path": p} for o, p in DEFAULT_FALLBACK],
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _load_spec() -> tuple[list[Repo], list[tuple[str, str]]]:
+    path = ensure_spec_file()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        repos = [Repo(str(item["owner"]), str(item["name"]),
+                      str(item.get("branch") or "main"),
+                      str(item.get("starts") or ""),
+                      str(item.get("ends") or ".js"),
+                      str(item.get("contains") or ""),
+                      int(item.get("limit") or 1))
+                 for item in data.get("repositories", [])]
+        fallback = [(str(item["owner"]), str(item["path"]))
+                    for item in data.get("fallback_urls", [])]
+        return (repos or DEFAULT_REPOS), (fallback or DEFAULT_FALLBACK)
+    except Exception:
+        return DEFAULT_REPOS, DEFAULT_FALLBACK
 
 
 def _decode(data: bytes) -> str:
@@ -133,12 +186,13 @@ def _candidate_name(owner: str, path: str) -> str:
 
 def fetch_candidates(progress: Callable[[str], None] | None = None) -> list[tuple[str, str, str]]:
     """Return (owner, path, text) candidates from all configured repositories."""
+    repos, fallback_urls = _load_spec()
     out: list[tuple[str, str, str]] = []
     seen: set[str] = set()
-    for repo in REPOS:
+    for repo in repos:
         if progress:
             progress(f"发现 {repo.owner}/{repo.name}…")
-        paths = [p for p in _tree(repo) if repo.include(p)][:repo.limit]
+        paths = [p for p in _tree(repo) if repo.matches(p)][:repo.limit]
         for path in paths:
             got = _download(repo.owner, repo.name, repo.branch, path)
             if got is None:
@@ -153,8 +207,8 @@ def fetch_candidates(progress: Callable[[str], None] | None = None) -> list[tupl
             seen.add(digest)
             out.append((repo.owner, path, text))
     if not out:
-        for owner, path in FALLBACK_URLS:
-            repo = next((r for r in REPOS if r.owner == owner), None)
+        for owner, path in fallback_urls:
+            repo = next((r for r in repos if r.owner == owner), None)
             if repo is None:
                 continue
             got = _download(repo.owner, repo.name, repo.branch, path)
