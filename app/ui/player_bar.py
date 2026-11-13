@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QSizePo
                                QSlider, QVBoxLayout, QWidget)
 
 from . import theme
+from .audio_route import FollowDefaultOutput, audio_error_dialog
 from .icons import outline_icon
 
 
@@ -106,6 +107,9 @@ class PlayerBar(QFrame):
         self._audio = QAudioOutput(self)
         self._player.setAudioOutput(self._audio)
         self._audio.setVolume(0.7)
+        self._route = FollowDefaultOutput(self._player, self._audio, self)
+        self._route.errorOccurred.connect(
+            lambda message: audio_error_dialog(self, message))
         self._current: Path | None = None
         self._seeking = False
         self._last_volume = 70

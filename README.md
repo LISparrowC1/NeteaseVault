@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-3b7a6e?style=for-the-badge)](LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D4?style=for-the-badge&logo=windows)](https://github.com/LISparrowC1/NeteaseVault/releases)
 
-当前版本：**1.2.9**
+当前版本：**1.2.10**
 
 网易云音乐「我喜欢的音乐」归档工具：同步歌单 → 多源下载 → 严格校验 → 本地长期保存。
 
@@ -27,6 +27,7 @@
 | 标签清理 | 固定 `歌名 - 歌手.ext` 文件名，只保留四项标签 |
 | 自定义源 | 手动导入、自动获取、健康检查、手动排序、按测试结果自动排序 |
 | 播放 | 内置播放器，歌词/整首频谱切换，频谱页左下显示实时上下镜像频谱 |
+| 音频输出 | 播放器和候选试听跟随 Windows 默认音频设备；插拔耳机或切换默认输出时自动重绑 |
 | 本地优先 | Cookie 用 Windows DPAPI 加密；不写注册表、不写 AppData、不上传听歌数据 |
 | 绿色安装 | 安装后整个目录可移动，删除目录即卸载；缓存可逐项清理 |
 

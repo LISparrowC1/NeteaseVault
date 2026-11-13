@@ -18,6 +18,7 @@ from ..core.download import download_chosen
 from ..core.match import match_candidate
 from ..db.store import Store
 from . import theme
+from .audio_route import FollowDefaultOutput
 from .messagebox import QMessageBox
 
 COLUMNS = ["来源", "标题", "艺术家", "专辑", "时长", "音质", "大小", "校验"]
@@ -83,6 +84,9 @@ class ApprovalDialog(QDialog):
         self._audio = QAudioOutput(self)
         self._player.setAudioOutput(self._audio)
         self._audio.setVolume(0.7)
+        self._route = FollowDefaultOutput(self._player, self._audio, self)
+        self._route.errorOccurred.connect(
+            lambda message: QMessageBox.warning(self, "试听失败", message))
 
     # -- table ------------------------------------------------------------
 
