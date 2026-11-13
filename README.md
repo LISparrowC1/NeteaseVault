@@ -224,7 +224,8 @@ music/    音乐库
 
 ## 🛠️ 构建
 
-需要 Windows + Python 3.14（项目自带的 `.venv` 可直接用）：
+需要 Windows + Python 3.14 + Node.js。仓库**不包含** `.venv` 和 `runtime\node.exe`：
+虚拟环境需要自己创建，Node 运行时由构建脚本从本机 `PATH` 复制。
 
 ```powershell
 python -m venv .venv
@@ -235,12 +236,15 @@ pwsh -NoProfile -File build\build.ps1
 构建会：
 
 1. 用 PyInstaller 生成 onedir 程序；
-2. 运行 `--selftest`；
-3. 把程序打包成安装器资源；
-4. 用 `csc.exe` 编译绿色安装器；
-5. 把安装包写到仓库上一级的 `release\`。
+2. 如果 `runtime\node.exe` 不存在，从本机 PATH 复制 `node.exe` 到 `runtime\`；
+3. 运行 `--selftest`；
+4. 把程序和 Node 运行时打包成安装器资源；
+5. 用 `csc.exe` 编译绿色安装器；
+6. 把安装包写到仓库上一级的 `release\`。
 
-自定义源还需要 `runtime\node.exe`。安装器只包含源码构建产物，不手工拼包。
+安装器由 `build.ps1` 从当前源码、已安装依赖和构建机上的 Node 运行时生成，不是手工拼包。
+
+不同机器、Python/PyInstaller/Node 版本构建出来的安装器功能等价，但**不保证字节级或 SHA-256 一致**；Release 里记录的哈希只对应发布那次构建。要复现相同功能，请使用同一份源码、相同依赖和相同 Node 大版本。
 
 ---
 
