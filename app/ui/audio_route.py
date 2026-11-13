@@ -23,10 +23,12 @@ class FollowDefaultOutput(QObject):
         self._audio = audio
         self._devices = QMediaDevices(self)
         self._rebinding = False
+        current_default = QMediaDevices.defaultAudioOutput()
+        self._last_default_id = b"" if current_default.isNull() else bytes(current_default.id())
 
-        device = QMediaDevices.defaultAudioOutput()
-        if not device.isNull():
-            self._audio.setDevice(device)
+        # Do not pin a device here.  Leaving QAudioOutput on its default lets
+        # Windows apply both the system default and its per-application endpoint
+        # policy, the same way native players such as PotPlayer do.
         self._devices.audioOutputsChanged.connect(self._on_outputs_changed)
         self._player.errorOccurred.connect(self._on_error)
 
@@ -36,12 +38,13 @@ class FollowDefaultOutput(QObject):
         device = QMediaDevices.defaultAudioOutput()
         if device.isNull():
             return
-        current = self._audio.device()
-        if not current.isNull() and current.id() == device.id():
+        identity = bytes(device.id())
+        if identity == self._last_default_id:
             return
-        self._rebind(device)
+        self._last_default_id = identity
+        self._rebind()
 
-    def _rebind(self, device) -> None:
+    def _rebind(self) -> None:
         was_playing = self._player.playbackState() == QMediaPlayer.PlayingState
         was_paused = self._player.playbackState() == QMediaPlayer.PausedState
         position = self._player.position()
@@ -54,7 +57,6 @@ class FollowDefaultOutput(QObject):
             self._player.setAudioOutput(None)
             old = self._audio
             new = QAudioOutput(self._player)
-            new.setDevice(device)
             new.setVolume(volume)
             new.setMuted(muted)
             self._player.setAudioOutput(new)

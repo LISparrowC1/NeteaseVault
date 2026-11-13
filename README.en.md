@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-3b7a6e?style=for-the-badge)](LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D4?style=for-the-badge&logo=windows)](https://github.com/LISparrowC1/NeteaseVault/releases)
 
-Current version: **1.2.10**
+Current version: **1.2.11**
 
 An archive tool for NetEase Cloud Music "Liked Songs": sync the playlist, resolve
 downloads through several engines, verify the files strictly, and keep a local
@@ -31,7 +31,7 @@ tags, and an atomic move into place.
 | Tag cleanup | Fixed `Title - Artist.ext` naming and a four-field tag whitelist |
 | Custom sources | Manual import, auto-fetch, health check, manual order, auto-order by test result |
 | Player | Lyrics and full-track spectrum; a live up/down mirrored spectrum sits below the left switch on the spectrum page |
-| Audio output | Player and preview follow the Windows default audio endpoint; rebind when headphones or the default device changes |
+| Audio output | No fixed endpoint: Windows chooses the system default or its per-app endpoint; output is recreated when the default changes |
 | Local first | Cookie encrypted with Windows DPAPI; no registry, AppData, telemetry or listening data uploads |
 | Green install | The installed folder is movable; delete it to uninstall; caches can be cleared individually |
 
